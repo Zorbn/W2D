@@ -7,7 +7,7 @@ enable_testing()
 set(TARGET_NAME WGPUTest)
 set(CMAKE_C_STANDARD 11)
 
-add_executable(${TARGET_NAME} main.c framework.c framework.h wgpu.h webgpu-headers/webgpu.h)
+add_executable(${TARGET_NAME} main.c framework.c framework.h wgpu.h webgpu-headers/webgpu.h deps/stb_image.h)
 
 if(MSVC)
     add_definitions(-DWGPU_TARGET=WGPU_TARGET_WINDOWS)
@@ -34,6 +34,7 @@ include($ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake)
 
 find_package(glfw3 CONFIG REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
+find_package(SDL2_image CONFIG REQUIRED)
 
 find_library(WGPU_LIBRARY wgpu_native HINTS "${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -42,6 +43,7 @@ target_link_libraries(
     glfw
     $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
     $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
+    $<IF:$<TARGET_EXISTS:SDL2_image::SDL2_image>,SDL2_image::SDL2_image,SDL2_image::SDL2_image-static>
     ${WGPU_LIBRARY}
     ${OS_LIBRARIES}
 )

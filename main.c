@@ -19,35 +19,43 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_syswm.h>
+#include <SDL2/SDL_image.h>
+
+// TODO: This shouldn't be in main.
+SDL_Surface *LoadSurface(const char *path)
+{
+    SDL_Surface *loadedSurface = IMG_Load(path);
+
+    if (!loadedSurface)
+    {
+        printf("Failed to load file at path: %s", path);
+        exit(-1);
+    }
+
+    SDL_Surface *surface = SDL_ConvertSurfaceFormat(loadedSurface, SDL_PIXELFORMAT_RGBA32, 0);
+    SDL_FreeSurface(loadedSurface);
+
+    return surface;
+}
 
 const float vertexData[] = {
-    -0.5f, -0.5f, +0.0f, 1.0f, 0.0f, 0.0f, // Vertex 1
-    +0.5f, -0.5f, +0.0f, 0.0f, 1.0f, 0.0f, // Vertex 2
-    +0.5f, +0.5f, +0.0f, 0.0f, 0.0f, 1.0f, // Vertex 3
-    -0.5f, +0.5f, +0.0f, 0.0f, 1.0f, 1.0f, // Vertex 4
+    // X Y Z, R G B, TextureX, TextureY
+    -0.5f, -0.5f, +0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, // Vertex 1
+    +0.5f, -0.5f, +0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, // Vertex 2
+    +0.5f, +0.5f, +0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, // Vertex 3
+    -0.5f, +0.5f, +0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Vertex 4
 
-    +0.0f, +0.0f, +1.0f, 1.0f, 0.0f, 0.0f, // Vertex 1
-    +1.0f, +0.0f, +1.0f, 0.0f, 1.0f, 0.0f, // Vertex 2
-    +1.0f, +1.0f, +1.0f, 0.0f, 0.0f, 1.0f, // Vertex 3
-    +0.0f, +1.0f, +1.0f, 0.0f, 1.0f, 1.0f, // Vertex 4
+    +0.0f, +0.0f, +1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, // Vertex 1
+    +1.0f, +0.0f, +1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, // Vertex 2
+    +1.0f, +1.0f, +1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, // Vertex 3
+    +0.0f, +1.0f, +1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Vertex 4
 };
-const int vertexDataCount = 48;
-const int vertexComponents = 6;
+const int vertexDataCount = 64;
+const int vertexComponents = 8;
 
 const uint32_t indexData[] = {
-    0,
-    1,
-    2,
-    0,
-    2,
-    3,
-
-    4,
-    5,
-    6,
-    4,
-    6,
-    7,
+    0, 1, 2, 0, 2, 3, // Triangle
+    4, 5, 6, 4, 6, 7, // Triangle
 };
 const int indexCount = 12;
 
@@ -77,7 +85,7 @@ typedef struct
 } TextureInfo;
 
 TextureInfo createDepthTexture(WGPUDevice device, WGPUTextureFormat depthTextureFormat,
-                   uint32_t windowWidth, uint32_t windowHeight)
+                               uint32_t windowWidth, uint32_t windowHeight)
 {
     WGPUTextureDescriptor depthTextureDescriptor = {
         .dimension = WGPUTextureDimension_2D,
@@ -262,7 +270,7 @@ int main(int argc, char *argv[])
     WGPUTextureFormat swapChainFormat =
         wgpuSurfaceGetPreferredFormat(surface, adapter);
 
-    WGPUVertexAttribute vertexAttributes[2] = {
+    WGPUVertexAttribute vertexAttributes[3] = {
         (WGPUVertexAttribute){
             .shaderLocation = 0,
             .format = WGPUVertexFormat_Float32x2,
@@ -272,7 +280,13 @@ int main(int argc, char *argv[])
             .shaderLocation = 1,
             .format = WGPUVertexFormat_Float32x3,
             .offset = 2 * sizeof(float),
-        }};
+        },
+        (WGPUVertexAttribute){
+            .shaderLocation = 2,
+            .format = WGPUVertexFormat_Float32x2,
+            .offset = 6 * sizeof(float),
+        },
+    };
 
     WGPUTextureFormat depthTextureFormat = WGPUTextureFormat_Depth24Plus;
     WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(
@@ -285,7 +299,7 @@ int main(int argc, char *argv[])
                     .entryPoint = "vs_main",
                     .bufferCount = 1,
                     .buffers = &(WGPUVertexBufferLayout){
-                        .attributeCount = 2,
+                        .attributeCount = 3,
                         .arrayStride = vertexComponents * sizeof(float),
                         .stepMode = WGPUVertexStepMode_Vertex,
                         .attributes = vertexAttributes,
@@ -336,17 +350,6 @@ int main(int argc, char *argv[])
                 },
             },
         });
-    // WGPUTextureDescriptor depthTextureDescriptor = {
-    //     .dimension = WGPUTextureDimension_2D,
-    //     .format = depthTextureFormat,
-    //     .mipLevelCount = 1,
-    //     .sampleCount = 1,
-    //     .size = {640, 480, 1}, // TODO: Handle resizing by creating a new depth texture.
-    //     .usage = WGPUTextureUsage_RenderAttachment,
-    //     .viewFormatCount = 1,
-    //     .viewFormats = &depthTextureFormat,
-    // };
-    // WGPUTexture depthTexture = wgpuDeviceCreateTexture(device, &depthTextureDescriptor);
 
     WGPUSwapChainDescriptor config = (WGPUSwapChainDescriptor){
         .nextInChain =
@@ -395,11 +398,66 @@ int main(int argc, char *argv[])
     bufferDescriptor.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform;
     WGPUBuffer uniformBuffer = wgpuDeviceCreateBuffer(device, &bufferDescriptor);
 
+    // Create the texture. TODO: Make this a reusable function.
+    WGPUTextureDescriptor textureDescriptor = {
+        .dimension = WGPUTextureDimension_2D,
+        .format = WGPUTextureFormat_RGBA8Unorm,
+        .mipLevelCount = 1,
+        .sampleCount = 1,
+        .size = {16, 16, 1}, // TODO: This should match the loaded image
+        .usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst,
+        .viewFormatCount = 0,
+        .viewFormats = NULL,
+    };
+    WGPUTexture texture = wgpuDeviceCreateTexture(device, &textureDescriptor);
+    // Testing texture from pixels:
+    {
+
+        SDL_Surface *textureSurface = LoadSurface("test.png");
+
+        uint8_t *data = (uint8_t *)(textureSurface->pixels);
+        WGPUImageCopyTexture destination = {
+            .texture = texture,
+            .mipLevel = 0,
+            .origin = {0, 0, 0},
+            .aspect = WGPUTextureAspect_All,
+        };
+        WGPUTextureDataLayout source = {
+            .offset = 0,
+            .bytesPerRow = 4 * textureDescriptor.size.width,
+            .rowsPerImage = textureDescriptor.size.height,
+        };
+        wgpuQueueWriteTexture(queue, &destination, data, 4 * textureSurface->w * textureSurface->h, &source, &textureDescriptor.size);
+
+        SDL_FreeSurface(textureSurface);
+    }
+    WGPUTextureViewDescriptor textureViewDescriptor = {
+        .aspect = WGPUTextureAspect_All,
+        .baseArrayLayer = 0,
+        .arrayLayerCount = 1,
+        .baseMipLevel = 0,
+        .mipLevelCount = 1,
+        .dimension = WGPUTextureViewDimension_2D,
+        .format = textureDescriptor.format,
+    };
+    WGPUTextureView textureView = wgpuTextureCreateView(texture, &textureViewDescriptor);
+    WGPUSamplerDescriptor textureSamplerDescriptor = {
+        .addressModeU = WGPUAddressMode_ClampToEdge,
+        .addressModeV = WGPUAddressMode_ClampToEdge,
+        .addressModeW = WGPUAddressMode_ClampToEdge,
+        .magFilter = WGPUFilterMode_Nearest,
+        .minFilter = WGPUFilterMode_Nearest,
+        .mipmapFilter = WGPUFilterMode_Linear,
+        .lodMinClamp = 0.0f,
+        .lodMaxClamp = 1.0f,
+        .compare = WGPUCompareFunction_Undefined,
+        .maxAnisotropy = 0,
+    };
+    WGPUSampler textureSampler = wgpuDeviceCreateSampler(device, &textureSamplerDescriptor);
+
     // Create the bind group for the uniform buffer.
-    WGPUBindGroupLayoutDescriptor bindGroupLayoutDescriptor = {
-        .nextInChain = NULL,
-        .entryCount = 1,
-        .entries = &(WGPUBindGroupLayoutEntry){
+    WGPUBindGroupLayoutEntry bindGroupLayoutEntries[3] = {
+        (WGPUBindGroupLayoutEntry){
             .binding = 0,
             .visibility = WGPUShaderStage_Vertex,
             .buffer = (WGPUBufferBindingLayout){
@@ -407,6 +465,27 @@ int main(int argc, char *argv[])
                 .minBindingSize = 2 * sizeof(float),
             },
         },
+        (WGPUBindGroupLayoutEntry){
+            .binding = 1,
+            .visibility = WGPUShaderStage_Fragment,
+            .texture = (WGPUTextureBindingLayout){
+                .sampleType = WGPUTextureSampleType_Float,
+                .viewDimension = WGPUTextureViewDimension_2D,
+            },
+        },
+        (WGPUBindGroupLayoutEntry){
+            .binding = 2,
+            .visibility = WGPUShaderStage_Fragment,
+            .sampler = (WGPUSamplerBindingLayout){
+                .type = WGPUSamplerBindingType_Filtering,
+            },
+        },
+    };
+
+    WGPUBindGroupLayoutDescriptor bindGroupLayoutDescriptor = {
+        .nextInChain = NULL,
+        .entryCount = 3,
+        .entries = bindGroupLayoutEntries,
     };
     WGPUBindGroupLayout bindGroupLayout = wgpuDeviceCreateBindGroupLayout(device, &bindGroupLayoutDescriptor);
     WGPUPipelineLayoutDescriptor layoutDescriptor = {
@@ -416,18 +495,30 @@ int main(int argc, char *argv[])
     };
     /* WGPUPipelineLayout layout = */ wgpuDeviceCreatePipelineLayout(device, &layoutDescriptor);
 
-    WGPUBindGroupEntry binding = {
-        .nextInChain = NULL,
-        .binding = 0,
-        .buffer = uniformBuffer,
-        .offset = 0,
-        .size = 2 * sizeof(float),
+    WGPUBindGroupEntry bindings[3] = {
+        (WGPUBindGroupEntry){
+            .nextInChain = NULL,
+            .binding = 0,
+            .buffer = uniformBuffer,
+            .offset = 0,
+            .size = 2 * sizeof(float),
+        },
+        (WGPUBindGroupEntry){
+            .nextInChain = NULL,
+            .binding = 1,
+            .textureView = textureView,
+        },
+        (WGPUBindGroupEntry){
+            .nextInChain = NULL,
+            .binding = 2,
+            .sampler = textureSampler,
+        },
     };
     WGPUBindGroupDescriptor bindGroupDescriptor = {
         .nextInChain = NULL,
         .layout = bindGroupLayout,
         .entryCount = bindGroupLayoutDescriptor.entryCount,
-        .entries = &binding,
+        .entries = bindings,
     };
     WGPUBindGroup bindGroup = wgpuDeviceCreateBindGroup(device, &bindGroupDescriptor);
 
