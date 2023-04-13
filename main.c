@@ -63,6 +63,8 @@ typedef struct {
     WGPUTexture texture;
     WGPUTextureView view;
     WGPUSampler sampler;
+    int width;
+    int height;
 } TextureInfo;
 
 void loadTextureData(WGPUQueue queue, WGPUTexture texture,
@@ -89,12 +91,14 @@ void loadTextureData(WGPUQueue queue, WGPUTexture texture,
 
 TextureInfo createTexture(WGPUDevice device, WGPUQueue queue, char *path) {
     SDL_Surface *textureSurface = LoadSurface(path);
+    int textureWidth = textureSurface->w;
+    int textureHeight = textureSurface->h;
     WGPUTextureDescriptor textureDescriptor = {
         .dimension = WGPUTextureDimension_2D,
         .format = WGPUTextureFormat_RGBA8Unorm,
         .mipLevelCount = 1,
         .sampleCount = 1,
-        .size = {textureSurface->w, textureSurface->h, 1},
+        .size = {textureWidth, textureHeight, 1},
         .usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst,
         .viewFormatCount = 0,
         .viewFormats = NULL,
@@ -133,6 +137,8 @@ TextureInfo createTexture(WGPUDevice device, WGPUQueue queue, char *path) {
         .texture = texture,
         .view = view,
         .sampler = sampler,
+        .width = textureWidth,
+        .height = textureHeight,
     };
 }
 
@@ -214,8 +220,14 @@ typedef struct {
     float x;
     float y;
     float z;
+
     float width;
     float height;
+
+    float texX;
+    float texY;
+    float texWidth;
+    float texHeight;
 } Sprite;
 
 const float spriteVertexData[] = {
@@ -243,6 +255,10 @@ typedef struct {
     WGPUBuffer vertexBuffer;
     WGPUBuffer indexBuffer;
     WGPUBindGroup bindGroup;
+    TextureInfo textureInfo;
+
+    float inverseTexWidth;
+    float inverseTexHeight;
 } SpriteBatch;
 
 SpriteBatch spriteBatchCreate(int maxSprites, char *texturePath,
@@ -341,6 +357,9 @@ SpriteBatch spriteBatchCreate(int maxSprites, char *texturePath,
         .vertexBuffer = vertexBuffer,
         .indexBuffer = indexBuffer,
         .bindGroup = bindGroup,
+        .textureInfo = textureInfo,
+        .inverseTexWidth = 1.0f / textureInfo.width,
+        .inverseTexHeight = 1.0f / textureInfo.height,
     };
 }
 
@@ -359,24 +378,34 @@ void spriteBatchAdd(SpriteBatch *spriteBatch, Sprite sprite) {
     int vertexComponentI = vertexI * spriteVertexComponents;
     int indexI = spriteI * indicesPerSprite;
 
+    // Convert the sprite's texture coordinates from pixel values to 0-1 floats.
+    float normalTextureWidth = sprite.texWidth * spriteBatch->inverseTexWidth;
+    float normalTextureHeight =
+        sprite.texHeight * spriteBatch->inverseTexHeight;
+    float normalTextureX = sprite.texX * spriteBatch->inverseTexWidth;
+    float normalTextureY = sprite.texY * spriteBatch->inverseTexHeight;
+
     for (int i = 0; i < verticesPerSprite; ++i) {
         int componentI = i * spriteVertexComponents;
-        spriteBatch->vertexData[vertexComponentI + componentI + 0] =
+        int vertexDataI = vertexComponentI + componentI;
+        spriteBatch->vertexData[vertexDataI + 0] =
             spriteVertexData[componentI + 0] * sprite.width + sprite.x;
-        spriteBatch->vertexData[vertexComponentI + componentI + 1] =
+        spriteBatch->vertexData[vertexDataI + 1] =
             spriteVertexData[componentI + 1] * sprite.height + sprite.y;
-        spriteBatch->vertexData[vertexComponentI + componentI + 2] =
+        spriteBatch->vertexData[vertexDataI + 2] =
             spriteVertexData[componentI + 2] + sprite.z;
-        spriteBatch->vertexData[vertexComponentI + componentI + 3] =
+        spriteBatch->vertexData[vertexDataI + 3] =
             spriteVertexData[componentI + 3];
-        spriteBatch->vertexData[vertexComponentI + componentI + 4] =
+        spriteBatch->vertexData[vertexDataI + 4] =
             spriteVertexData[componentI + 4];
-        spriteBatch->vertexData[vertexComponentI + componentI + 5] =
+        spriteBatch->vertexData[vertexDataI + 5] =
             spriteVertexData[componentI + 5];
-        spriteBatch->vertexData[vertexComponentI + componentI + 6] =
-            spriteVertexData[componentI + 6];
-        spriteBatch->vertexData[vertexComponentI + componentI + 7] =
-            spriteVertexData[componentI + 7];
+        spriteBatch->vertexData[vertexDataI + 6] =
+            spriteVertexData[componentI + 6] * normalTextureWidth +
+            normalTextureX;
+        spriteBatch->vertexData[vertexDataI + 7] =
+            spriteVertexData[componentI + 7] * normalTextureHeight +
+            normalTextureY;
     }
 
     for (int i = 0; i < indicesPerSprite; ++i) {
@@ -701,23 +730,29 @@ int main(int argc, char *argv[]) {
                                      .x = 8.0f,
                                      .y = 8.0f,
                                      .z = -1.0f,
-                                     .width = 16.0f,
-                                     .height = 16.0f,
+                                     .width = 160.0f,
+                                     .height = 160.0f,
+                                     .texWidth = 8.0f,
+                                     .texHeight = 8.0f,
                                  });
     spriteBatchAdd(&spriteBatch, (Sprite){
                                      .x = 0.0f,
                                      .y = 0.0f,
                                      .z = 0.0f,
-                                     .width = 16.0f,
-                                     .height = 16.0f,
+                                     .width = 64.0f,
+                                     .height = 64.0f,
+                                     .texX = 8.0f,
+                                     .texY = 8.0f,
+                                     .texWidth = 8.0f,
+                                     .texHeight = 8.0f,
                                  });
-    spriteBatchAdd(&spriteBatch, (Sprite){
-                                     .x = 16.0f,
-                                     .y = 16.0f,
-                                     .z = 1.0f,
-                                     .width = 16.0f,
-                                     .height = 16.0f,
-                                 });
+    // spriteBatchAdd(&spriteBatch, (Sprite){
+    //                                  .x = 16.0f,
+    //                                  .y = 16.0f,
+    //                                  .z = 1.0f,
+    //                                  .width = 16.0f,
+    //                                  .height = 16.0f,
+    //                              });
 
     bool isRunning = true;
     while (isRunning) {
