@@ -1,11 +1,11 @@
-#include "webgpu-headers/webgpu.h"
-#include "wgpu.h"
+#include <inttypes.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "framework.h"
 #include "unused.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <inttypes.h>
+#include "webgpu-headers/webgpu.h"
+#include "wgpu.h"
 
 #define WGPU_TARGET_MACOS 1
 #define WGPU_TARGET_LINUX_X11 2
@@ -18,75 +18,128 @@
 #endif
 
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_syswm.h>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_syswm.h>
 
 // TODO: This shouldn't be in main.
-SDL_Surface *LoadSurface(const char *path)
-{
+SDL_Surface *LoadSurface(const char *path) {
     SDL_Surface *loadedSurface = IMG_Load(path);
 
-    if (!loadedSurface)
-    {
+    if (!loadedSurface) {
         printf("Failed to load file at path: %s", path);
         exit(-1);
     }
 
-    SDL_Surface *surface = SDL_ConvertSurfaceFormat(loadedSurface, SDL_PIXELFORMAT_RGBA32, 0);
+    SDL_Surface *surface =
+        SDL_ConvertSurfaceFormat(loadedSurface, SDL_PIXELFORMAT_RGBA32, 0);
     SDL_FreeSurface(loadedSurface);
 
     return surface;
 }
 
-const float vertexData[] = {
-    // X Y Z, R G B, TextureX, TextureY
-    -0.5f, -0.5f, +0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, // Vertex 1
-    +0.5f, -0.5f, +0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, // Vertex 2
-    +0.5f, +0.5f, +0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, // Vertex 3
-    -0.5f, +0.5f, +0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Vertex 4
-
-    +0.0f, +0.0f, +1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, // Vertex 1
-    +1.0f, +0.0f, +1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, // Vertex 2
-    +1.0f, +1.0f, +1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, // Vertex 3
-    +0.0f, +1.0f, +1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Vertex 4
-};
-const int vertexDataCount = 64;
-const int vertexComponents = 8;
-
-const uint32_t indexData[] = {
-    0, 1, 2, 0, 2, 3, // Triangle
-    4, 5, 6, 4, 6, 7, // Triangle
-};
-const int indexCount = 12;
-
 WGPUInstance instance = NULL;
 
 static void handle_device_lost(WGPUDeviceLostReason reason, char const *message,
-                               void *userdata)
-{
+                               void *userdata) {
     UNUSED(userdata);
 
     printf("DEVICE LOST (%d): %s\n", reason, message);
 }
 
 static void handle_uncaptured_error(WGPUErrorType type, char const *message,
-                                    void *userdata)
-{
+                                    void *userdata) {
     UNUSED(userdata);
 
     printf("UNCAPTURED ERROR (%d): %s\n", type, message);
 }
 
-typedef struct
-{
+typedef struct {
     WGPUTexture texture;
     WGPUTextureView view;
     WGPURenderPassDepthStencilAttachment attachment;
+} DepthTextureInfo;
+
+typedef struct {
+    WGPUTexture texture;
+    WGPUTextureView view;
+    WGPUSampler sampler;
 } TextureInfo;
 
-TextureInfo createDepthTexture(WGPUDevice device, WGPUTextureFormat depthTextureFormat,
-                               uint32_t windowWidth, uint32_t windowHeight)
-{
+void loadTextureData(WGPUQueue queue, WGPUTexture texture,
+                     SDL_Surface *textureSurface) {
+    WGPUImageCopyTexture destination = {
+        .texture = texture,
+        .mipLevel = 0,
+        .origin = {0, 0, 0},
+        .aspect = WGPUTextureAspect_All,
+    };
+    WGPUTextureDataLayout source = {
+        .offset = 0,
+        .bytesPerRow = 4 * textureSurface->w,
+        .rowsPerImage = textureSurface->h,
+    };
+
+    uint8_t *data = (uint8_t *)(textureSurface->pixels);
+    WGPUExtent3D size = (WGPUExtent3D){textureSurface->w, textureSurface->h, 1};
+
+    wgpuQueueWriteTexture(queue, &destination, data,
+                          4 * textureSurface->w * textureSurface->h, &source,
+                          &size);
+}
+
+TextureInfo createTexture(WGPUDevice device, WGPUQueue queue, char *path) {
+    SDL_Surface *textureSurface = LoadSurface(path);
+    WGPUTextureDescriptor textureDescriptor = {
+        .dimension = WGPUTextureDimension_2D,
+        .format = WGPUTextureFormat_RGBA8Unorm,
+        .mipLevelCount = 1,
+        .sampleCount = 1,
+        .size = {textureSurface->w, textureSurface->h, 1},
+        .usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst,
+        .viewFormatCount = 0,
+        .viewFormats = NULL,
+    };
+    WGPUTexture texture = wgpuDeviceCreateTexture(device, &textureDescriptor);
+    loadTextureData(queue, texture, textureSurface);
+    SDL_FreeSurface(textureSurface);
+
+    WGPUTextureViewDescriptor textureViewDescriptor = {
+        .aspect = WGPUTextureAspect_All,
+        .baseArrayLayer = 0,
+        .arrayLayerCount = 1,
+        .baseMipLevel = 0,
+        .mipLevelCount = 1,
+        .dimension = WGPUTextureViewDimension_2D,
+        .format = textureDescriptor.format,
+    };
+    WGPUTextureView view =
+        wgpuTextureCreateView(texture, &textureViewDescriptor);
+    WGPUSamplerDescriptor textureSamplerDescriptor = {
+        .addressModeU = WGPUAddressMode_ClampToEdge,
+        .addressModeV = WGPUAddressMode_ClampToEdge,
+        .addressModeW = WGPUAddressMode_ClampToEdge,
+        .magFilter = WGPUFilterMode_Nearest,
+        .minFilter = WGPUFilterMode_Nearest,
+        .mipmapFilter = WGPUFilterMode_Linear,
+        .lodMinClamp = 0.0f,
+        .lodMaxClamp = 1.0f,
+        .compare = WGPUCompareFunction_Undefined,
+        .maxAnisotropy = 0,
+    };
+    WGPUSampler sampler =
+        wgpuDeviceCreateSampler(device, &textureSamplerDescriptor);
+
+    return (TextureInfo){
+        .texture = texture,
+        .view = view,
+        .sampler = sampler,
+    };
+}
+
+DepthTextureInfo createDepthTexture(WGPUDevice device,
+                                    WGPUTextureFormat depthTextureFormat,
+                                    uint32_t windowWidth,
+                                    uint32_t windowHeight) {
     WGPUTextureDescriptor depthTextureDescriptor = {
         .dimension = WGPUTextureDimension_2D,
         .format = depthTextureFormat,
@@ -97,7 +150,8 @@ TextureInfo createDepthTexture(WGPUDevice device, WGPUTextureFormat depthTexture
         .viewFormatCount = 1,
         .viewFormats = &depthTextureFormat,
     };
-    WGPUTexture texture = wgpuDeviceCreateTexture(device, &depthTextureDescriptor);
+    WGPUTexture texture =
+        wgpuDeviceCreateTexture(device, &depthTextureDescriptor);
     WGPUTextureViewDescriptor depthTextureViewDescriptor = {
         .aspect = WGPUTextureAspect_DepthOnly,
         .baseArrayLayer = 0,
@@ -107,49 +161,256 @@ TextureInfo createDepthTexture(WGPUDevice device, WGPUTextureFormat depthTexture
         .dimension = WGPUTextureViewDimension_2D,
         .format = depthTextureFormat,
     };
-    WGPUTextureView view = wgpuTextureCreateView(texture, &depthTextureViewDescriptor);
-    WGPURenderPassDepthStencilAttachment attachment = (WGPURenderPassDepthStencilAttachment){
-        .view = view,
-        .depthClearValue = 1.0f,
-        .depthLoadOp = WGPULoadOp_Clear,
-        .depthStoreOp = WGPUStoreOp_Store,
-        .depthReadOnly = false,
-        .stencilClearValue = 0,
-        .stencilLoadOp = WGPULoadOp_Clear,
-        .stencilStoreOp = WGPUStoreOp_Store,
-        .stencilReadOnly = true,
-    };
+    WGPUTextureView view =
+        wgpuTextureCreateView(texture, &depthTextureViewDescriptor);
+    WGPURenderPassDepthStencilAttachment attachment =
+        (WGPURenderPassDepthStencilAttachment){
+            .view = view,
+            .depthClearValue = 1.0f,
+            .depthLoadOp = WGPULoadOp_Clear,
+            .depthStoreOp = WGPUStoreOp_Store,
+            .depthReadOnly = false,
+            .stencilClearValue = 0,
+            .stencilLoadOp = WGPULoadOp_Clear,
+            .stencilStoreOp = WGPUStoreOp_Store,
+            .stencilReadOnly = true,
+        };
 
-    return (TextureInfo){
+    return (DepthTextureInfo){
         .texture = texture,
         .view = view,
         .attachment = attachment,
     };
 }
 
-int main(int argc, char *argv[])
-{
+typedef struct {
+    float x;
+    float y;
+    float z;
+} Sprite;
+
+const float spriteVertexData[] = {
+    // X Y Z, R G B, TextureX, TextureY
+    +0.0f, +0.0f, +0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, // Vertex 1
+    +1.0f, +0.0f, +0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, // Vertex 2
+    +1.0f, +1.0f, +0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, // Vertex 3
+    +0.0f, +1.0f, +0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Vertex 4
+};
+
+const uint32_t spriteIndexData[] = {
+    0, 1, 2, 0, 2, 3, // Quad
+};
+
+const int spriteVertexComponents = 8;
+const int verticesPerSprite = 4;
+const int indicesPerSprite = 6;
+
+typedef struct {
+    int maxSprites;
+    int spriteCount;
+    Sprite *sprites;
+
+    float *vertexData;
+    uint32_t *indexData;
+    WGPUBuffer vertexBuffer;
+    WGPUBuffer indexBuffer;
+    WGPUBindGroup bindGroup;
+} SpriteBatch;
+
+SpriteBatch spriteBatchCreate(int maxSprites, char *texturePath,
+                              WGPUDevice device, WGPUQueue queue,
+                              WGPUBuffer uniformBuffer) {
+    // Create the sprite's vertex buffer.
+    WGPUBufferDescriptor bufferDescriptor = (WGPUBufferDescriptor){
+        .nextInChain = NULL,
+        .size = maxSprites * verticesPerSprite * spriteVertexComponents *
+                sizeof(float),
+        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
+        .mappedAtCreation = false,
+    };
+    WGPUBuffer vertexBuffer = wgpuDeviceCreateBuffer(device, &bufferDescriptor);
+
+    // Create the sprite's index buffer.
+    bufferDescriptor.size = maxSprites * indicesPerSprite * sizeof(uint32_t);
+    bufferDescriptor.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index;
+    WGPUBuffer indexBuffer = wgpuDeviceCreateBuffer(device, &bufferDescriptor);
+
+    TextureInfo textureInfo = createTexture(device, queue, texturePath);
+
+    // Create the sprite's bind group:
+    WGPUBindGroupLayoutEntry bindGroupLayoutEntries[3] = {
+        (WGPUBindGroupLayoutEntry){
+            .binding = 0,
+            .visibility = WGPUShaderStage_Vertex,
+            .buffer =
+                (WGPUBufferBindingLayout){
+                    .type = WGPUBufferBindingType_Uniform,
+                    .minBindingSize = 2 * sizeof(float),
+                },
+        },
+        (WGPUBindGroupLayoutEntry){
+            .binding = 1,
+            .visibility = WGPUShaderStage_Fragment,
+            .texture =
+                (WGPUTextureBindingLayout){
+                    .sampleType = WGPUTextureSampleType_Float,
+                    .viewDimension = WGPUTextureViewDimension_2D,
+                },
+        },
+        (WGPUBindGroupLayoutEntry){
+            .binding = 2,
+            .visibility = WGPUShaderStage_Fragment,
+            .sampler =
+                (WGPUSamplerBindingLayout){
+                    .type = WGPUSamplerBindingType_Filtering,
+                },
+        },
+    };
+
+    WGPUBindGroupLayoutDescriptor bindGroupLayoutDescriptor = {
+        .nextInChain = NULL,
+        .entryCount = 3,
+        .entries = bindGroupLayoutEntries,
+    };
+    WGPUBindGroupLayout bindGroupLayout =
+        wgpuDeviceCreateBindGroupLayout(device, &bindGroupLayoutDescriptor);
+
+    WGPUBindGroupEntry bindings[3] = {
+        (WGPUBindGroupEntry){
+            .nextInChain = NULL,
+            .binding = 0,
+            .buffer = uniformBuffer,
+            .offset = 0,
+            .size = 2 * sizeof(float),
+        },
+        (WGPUBindGroupEntry){
+            .nextInChain = NULL,
+            .binding = 1,
+            .textureView = textureInfo.view,
+        },
+        (WGPUBindGroupEntry){
+            .nextInChain = NULL,
+            .binding = 2,
+            .sampler = textureInfo.sampler,
+        },
+    };
+    WGPUBindGroupDescriptor bindGroupDescriptor = {
+        .nextInChain = NULL,
+        .layout = bindGroupLayout,
+        .entryCount = bindGroupLayoutDescriptor.entryCount,
+        .entries = bindings,
+    };
+    WGPUBindGroup bindGroup =
+        wgpuDeviceCreateBindGroup(device, &bindGroupDescriptor);
+
+    return (SpriteBatch){
+        .maxSprites = maxSprites,
+        .spriteCount = 0,
+        .sprites = calloc(maxSprites, sizeof(SpriteBatch)),
+        .vertexData =
+            calloc(maxSprites * verticesPerSprite * spriteVertexComponents,
+                   sizeof(float)),
+        .indexData = calloc(maxSprites * indicesPerSprite, sizeof(uint32_t)),
+        .vertexBuffer = vertexBuffer,
+        .indexBuffer = indexBuffer,
+        .bindGroup = bindGroup,
+    };
+}
+
+void spriteBatchClear(SpriteBatch *spriteBatch) {
+    spriteBatch->spriteCount = 0;
+}
+
+void spriteBatchAdd(SpriteBatch *spriteBatch, Sprite sprite) {
+    if (spriteBatch->spriteCount >= spriteBatch->maxSprites) {
+        return;
+    }
+
+    int spriteI = spriteBatch->spriteCount;
+    ++spriteBatch->spriteCount;
+    int vertexI = spriteI * verticesPerSprite;
+    int vertexComponentI = vertexI * spriteVertexComponents;
+    int indexI = spriteI * indicesPerSprite;
+
+    for (int i = 0; i < verticesPerSprite; ++i) {
+        int componentI = i * spriteVertexComponents;
+        spriteBatch->vertexData[vertexComponentI + componentI + 0] =
+            spriteVertexData[componentI + 0] + sprite.x;
+        spriteBatch->vertexData[vertexComponentI + componentI + 1] =
+            spriteVertexData[componentI + 1] + sprite.y;
+        spriteBatch->vertexData[vertexComponentI + componentI + 2] =
+            spriteVertexData[componentI + 2] + sprite.z;
+        spriteBatch->vertexData[vertexComponentI + componentI + 3] =
+            spriteVertexData[componentI + 3];
+        spriteBatch->vertexData[vertexComponentI + componentI + 4] =
+            spriteVertexData[componentI + 4];
+        spriteBatch->vertexData[vertexComponentI + componentI + 5] =
+            spriteVertexData[componentI + 5];
+        spriteBatch->vertexData[vertexComponentI + componentI + 6] =
+            spriteVertexData[componentI + 6];
+        spriteBatch->vertexData[vertexComponentI + componentI + 7] =
+            spriteVertexData[componentI + 7];
+    }
+
+    for (int i = 0; i < indicesPerSprite; ++i) {
+        spriteBatch->indexData[indexI + i] = spriteIndexData[i] + vertexI;
+    }
+
+    // TODO: Is it necessary to store sprites.
+    spriteBatch->sprites[spriteI] = sprite;
+}
+
+void spriteBatchDraw(SpriteBatch *spriteBatch, WGPUQueue queue,
+                     WGPURenderPassEncoder renderPass,
+                     WGPURenderPipeline pipeline) {
+    if (spriteBatch->spriteCount == 0) {
+        return;
+    }
+
+    int indexCount = spriteBatch->spriteCount * indicesPerSprite;
+    int vertexComponentCount =
+        spriteBatch->spriteCount * verticesPerSprite * spriteVertexComponents;
+
+    wgpuQueueWriteBuffer(queue, spriteBatch->vertexBuffer, 0,
+                         spriteBatch->vertexData,
+                         vertexComponentCount * sizeof(float));
+    wgpuQueueWriteBuffer(queue, spriteBatch->indexBuffer, 0,
+                         spriteBatch->indexData, indexCount * sizeof(uint32_t));
+
+    wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
+    wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0,
+                                         spriteBatch->vertexBuffer, 0,
+                                         vertexComponentCount * sizeof(float));
+    wgpuRenderPassEncoderSetIndexBuffer(renderPass, spriteBatch->indexBuffer,
+                                        WGPUIndexFormat_Uint32, 0,
+                                        indexCount * sizeof(uint32_t));
+    wgpuRenderPassEncoderSetBindGroup(renderPass, 0, spriteBatch->bindGroup, 0,
+                                      NULL);
+
+    wgpuRenderPassEncoderDrawIndexed(renderPass, indexCount, 1, 0, 0, 0);
+}
+
+int main(int argc, char *argv[]) {
     UNUSED(argc);
     UNUSED(argv);
     initializeLog();
 
-    if (SDL_Init(SDL_INIT_VIDEO) < 0)
-    {
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         printf("Cannot initialize SDL");
         return 1;
     }
 
-    SDL_Window *window = SDL_CreateWindow("WGPU C",
-                                          SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                          640, 480, SDL_WINDOW_RESIZABLE);
+    SDL_Window *window = SDL_CreateWindow("WGPU C", SDL_WINDOWPOS_CENTERED,
+                                          SDL_WINDOWPOS_CENTERED, 640, 480,
+                                          SDL_WINDOW_RESIZABLE);
 
-    if (!window)
-    {
+    if (!window) {
         printf("Cannot create window");
         return 1;
     }
 
-    instance = wgpuCreateInstance(&(WGPUInstanceDescriptor){.nextInChain = NULL});
+    instance =
+        wgpuCreateInstance(&(WGPUInstanceDescriptor){.nextInChain = NULL});
 
     WGPUSurface surface;
 
@@ -174,7 +435,8 @@ int main(int argc, char *argv[])
                         .chain =
                             (WGPUChainedStruct){
                                 .next = NULL,
-                                .sType = WGPUSType_SurfaceDescriptorFromMetalLayer,
+                                .sType =
+                                    WGPUSType_SurfaceDescriptorFromMetalLayer,
                             },
                         .layer = metal_layer,
                     },
@@ -194,7 +456,8 @@ int main(int argc, char *argv[])
                         .chain =
                             (WGPUChainedStruct){
                                 .next = NULL,
-                                .sType = WGPUSType_SurfaceDescriptorFromXlibWindow,
+                                .sType =
+                                    WGPUSType_SurfaceDescriptorFromXlibWindow,
                             },
                         .display = x11_display,
                         .window = x11_window,
@@ -237,7 +500,8 @@ int main(int argc, char *argv[])
                         .chain =
                             (WGPUChainedStruct){
                                 .next = NULL,
-                                .sType = WGPUSType_SurfaceDescriptorFromWindowsHWND,
+                                .sType =
+                                    WGPUSType_SurfaceDescriptorFromWindowsHWND,
                             },
                         .hinstance = hinstance,
                         .hwnd = hwnd,
@@ -251,8 +515,8 @@ int main(int argc, char *argv[])
     WGPURequestAdapterOptions adapterOptions = {0};
     adapterOptions.compatibleSurface = surface;
     WGPUAdapter adapter;
-    wgpuInstanceRequestAdapter(instance, &adapterOptions, request_adapter_callback,
-                               (void *)&adapter);
+    wgpuInstanceRequestAdapter(instance, &adapterOptions,
+                               request_adapter_callback, (void *)&adapter);
 
     printAdapterFeatures(adapter);
     printSurfaceCapabilities(surface, adapter);
@@ -265,7 +529,8 @@ int main(int argc, char *argv[])
     wgpuDeviceSetDeviceLostCallback(device, handle_device_lost, NULL);
 
     WGPUShaderModuleDescriptor shaderSource = load_wgsl("shader.wgsl");
-    WGPUShaderModule shader = wgpuDeviceCreateShaderModule(device, &shaderSource);
+    WGPUShaderModule shader =
+        wgpuDeviceCreateShaderModule(device, &shaderSource);
 
     WGPUTextureFormat swapChainFormat =
         wgpuSurfaceGetPreferredFormat(surface, adapter);
@@ -273,13 +538,13 @@ int main(int argc, char *argv[])
     WGPUVertexAttribute vertexAttributes[3] = {
         (WGPUVertexAttribute){
             .shaderLocation = 0,
-            .format = WGPUVertexFormat_Float32x2,
+            .format = WGPUVertexFormat_Float32x3,
             .offset = 0,
         },
         (WGPUVertexAttribute){
             .shaderLocation = 1,
             .format = WGPUVertexFormat_Float32x3,
-            .offset = 2 * sizeof(float),
+            .offset = 3 * sizeof(float),
         },
         (WGPUVertexAttribute){
             .shaderLocation = 2,
@@ -298,57 +563,73 @@ int main(int argc, char *argv[])
                     .module = shader,
                     .entryPoint = "vs_main",
                     .bufferCount = 1,
-                    .buffers = &(WGPUVertexBufferLayout){
-                        .attributeCount = 3,
-                        .arrayStride = vertexComponents * sizeof(float),
-                        .stepMode = WGPUVertexStepMode_Vertex,
-                        .attributes = vertexAttributes,
-                    },
+                    .buffers =
+                        &(WGPUVertexBufferLayout){
+                            .attributeCount = 3,
+                            .arrayStride = spriteVertexComponents * sizeof(float),
+                            .stepMode = WGPUVertexStepMode_Vertex,
+                            .attributes = vertexAttributes,
+                        },
                 },
-            .primitive = (WGPUPrimitiveState){.topology = WGPUPrimitiveTopology_TriangleList, .stripIndexFormat = WGPUIndexFormat_Undefined, .frontFace = WGPUFrontFace_CCW, .cullMode = WGPUCullMode_None},
-            .multisample = (WGPUMultisampleState){
-                .count = 1,
-                .mask = (uint32_t)(~0),
-                .alphaToCoverageEnabled = false,
-            },
-            .fragment = &(WGPUFragmentState){
-                .module = shader,
-                .entryPoint = "fs_main",
-                .targetCount = 1,
-                .targets = &(WGPUColorTargetState){
-                    .format = swapChainFormat,
-                    .blend = &(WGPUBlendState){.color = (WGPUBlendComponent){
-                                                   .srcFactor = WGPUBlendFactor_One,
-                                                   .dstFactor = WGPUBlendFactor_Zero,
-                                                   .operation = WGPUBlendOperation_Add,
-                                               },
-                                               .alpha = (WGPUBlendComponent){
-                                                   .srcFactor = WGPUBlendFactor_One,
-                                                   .dstFactor = WGPUBlendFactor_Zero,
-                                                   .operation = WGPUBlendOperation_Add,
-                                               }},
-                    .writeMask = WGPUColorWriteMask_All,
+            .primitive =
+                (WGPUPrimitiveState){
+                    .topology = WGPUPrimitiveTopology_TriangleList,
+                    .stripIndexFormat = WGPUIndexFormat_Undefined,
+                    .frontFace = WGPUFrontFace_CCW,
+                    .cullMode = WGPUCullMode_None},
+            .multisample =
+                (WGPUMultisampleState){
+                    .count = 1,
+                    .mask = (uint32_t)(~0),
+                    .alphaToCoverageEnabled = false,
                 },
-            },
-            .depthStencil = &(WGPUDepthStencilState){
-                .depthCompare = WGPUCompareFunction_Less,
-                .depthWriteEnabled = true,
-                .format = depthTextureFormat,
-                .stencilReadMask = 0,
-                .stencilWriteMask = 0,
-                .stencilFront = (WGPUStencilFaceState){
-                    .compare = WGPUCompareFunction_Always,
-                    .failOp = WGPUStencilOperation_Keep,
-                    .depthFailOp = WGPUStencilOperation_Keep,
-                    .passOp = WGPUStencilOperation_Keep,
+            .fragment =
+                &(WGPUFragmentState){
+                    .module = shader,
+                    .entryPoint = "fs_main",
+                    .targetCount = 1,
+                    .targets =
+                        &(WGPUColorTargetState){
+                            .format = swapChainFormat,
+                            .blend =
+                                &(WGPUBlendState){
+                                    .color =
+                                        (WGPUBlendComponent){
+                                            .srcFactor = WGPUBlendFactor_One,
+                                            .dstFactor = WGPUBlendFactor_Zero,
+                                            .operation = WGPUBlendOperation_Add,
+                                        },
+                                    .alpha =
+                                        (WGPUBlendComponent){
+                                            .srcFactor = WGPUBlendFactor_One,
+                                            .dstFactor = WGPUBlendFactor_Zero,
+                                            .operation = WGPUBlendOperation_Add,
+                                        }},
+                            .writeMask = WGPUColorWriteMask_All,
+                        },
                 },
-                .stencilBack = (WGPUStencilFaceState){
-                    .compare = WGPUCompareFunction_Always,
-                    .failOp = WGPUStencilOperation_Keep,
-                    .depthFailOp = WGPUStencilOperation_Keep,
-                    .passOp = WGPUStencilOperation_Keep,
+            .depthStencil =
+                &(WGPUDepthStencilState){
+                    .depthCompare = WGPUCompareFunction_Less,
+                    .depthWriteEnabled = true,
+                    .format = depthTextureFormat,
+                    .stencilReadMask = 0,
+                    .stencilWriteMask = 0,
+                    .stencilFront =
+                        (WGPUStencilFaceState){
+                            .compare = WGPUCompareFunction_Always,
+                            .failOp = WGPUStencilOperation_Keep,
+                            .depthFailOp = WGPUStencilOperation_Keep,
+                            .passOp = WGPUStencilOperation_Keep,
+                        },
+                    .stencilBack =
+                        (WGPUStencilFaceState){
+                            .compare = WGPUCompareFunction_Always,
+                            .failOp = WGPUStencilOperation_Keep,
+                            .depthFailOp = WGPUStencilOperation_Keep,
+                            .passOp = WGPUStencilOperation_Keep,
+                        },
                 },
-            },
         });
 
     WGPUSwapChainDescriptor config = (WGPUSwapChainDescriptor){
@@ -372,198 +653,83 @@ int main(int argc, char *argv[])
 
     SDL_GetWindowSize(window, (int *)&config.width, (int *)&config.height);
 
-    TextureInfo depthTextureInfo = createDepthTexture(device, depthTextureFormat, config.width, config.height);
+    DepthTextureInfo depthTextureInfo = createDepthTexture(
+        device, depthTextureFormat, config.width, config.height);
 
-    WGPUSwapChain swapChain = wgpuDeviceCreateSwapChain(device, surface, &config);
+    WGPUSwapChain swapChain =
+        wgpuDeviceCreateSwapChain(device, surface, &config);
     WGPUQueue queue = wgpuDeviceGetQueue(device);
 
-    // Create the vertex buffer.
+    // Create the screen ratio uniform buffer.
     WGPUBufferDescriptor bufferDescriptor = (WGPUBufferDescriptor){
         .nextInChain = NULL,
-        .size = vertexDataCount * sizeof(float),
-        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
+        .size = 2 * sizeof(float),
+        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
         .mappedAtCreation = false,
     };
-    WGPUBuffer vertexBuffer = wgpuDeviceCreateBuffer(device, &bufferDescriptor);
-    wgpuQueueWriteBuffer(queue, vertexBuffer, 0, vertexData, bufferDescriptor.size);
+    WGPUBuffer uniformBuffer =
+        wgpuDeviceCreateBuffer(device, &bufferDescriptor);
 
-    // Create the index buffer.
-    bufferDescriptor.size = indexCount * sizeof(uint32_t);
-    bufferDescriptor.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index;
-    WGPUBuffer indexBuffer = wgpuDeviceCreateBuffer(device, &bufferDescriptor);
-    wgpuQueueWriteBuffer(queue, indexBuffer, 0, indexData, bufferDescriptor.size);
-
-    // Create the screen ratio uniform buffer.
-    bufferDescriptor.size = 2 * sizeof(float);
-    bufferDescriptor.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform;
-    WGPUBuffer uniformBuffer = wgpuDeviceCreateBuffer(device, &bufferDescriptor);
-
-    // Create the texture. TODO: Make this a reusable function.
-    WGPUTextureDescriptor textureDescriptor = {
-        .dimension = WGPUTextureDimension_2D,
-        .format = WGPUTextureFormat_RGBA8Unorm,
-        .mipLevelCount = 1,
-        .sampleCount = 1,
-        .size = {16, 16, 1}, // TODO: This should match the loaded image
-        .usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst,
-        .viewFormatCount = 0,
-        .viewFormats = NULL,
-    };
-    WGPUTexture texture = wgpuDeviceCreateTexture(device, &textureDescriptor);
-    // Testing texture from pixels:
-    {
-
-        SDL_Surface *textureSurface = LoadSurface("test.png");
-
-        uint8_t *data = (uint8_t *)(textureSurface->pixels);
-        WGPUImageCopyTexture destination = {
-            .texture = texture,
-            .mipLevel = 0,
-            .origin = {0, 0, 0},
-            .aspect = WGPUTextureAspect_All,
-        };
-        WGPUTextureDataLayout source = {
-            .offset = 0,
-            .bytesPerRow = 4 * textureDescriptor.size.width,
-            .rowsPerImage = textureDescriptor.size.height,
-        };
-        wgpuQueueWriteTexture(queue, &destination, data, 4 * textureSurface->w * textureSurface->h, &source, &textureDescriptor.size);
-
-        SDL_FreeSurface(textureSurface);
-    }
-    WGPUTextureViewDescriptor textureViewDescriptor = {
-        .aspect = WGPUTextureAspect_All,
-        .baseArrayLayer = 0,
-        .arrayLayerCount = 1,
-        .baseMipLevel = 0,
-        .mipLevelCount = 1,
-        .dimension = WGPUTextureViewDimension_2D,
-        .format = textureDescriptor.format,
-    };
-    WGPUTextureView textureView = wgpuTextureCreateView(texture, &textureViewDescriptor);
-    WGPUSamplerDescriptor textureSamplerDescriptor = {
-        .addressModeU = WGPUAddressMode_ClampToEdge,
-        .addressModeV = WGPUAddressMode_ClampToEdge,
-        .addressModeW = WGPUAddressMode_ClampToEdge,
-        .magFilter = WGPUFilterMode_Nearest,
-        .minFilter = WGPUFilterMode_Nearest,
-        .mipmapFilter = WGPUFilterMode_Linear,
-        .lodMinClamp = 0.0f,
-        .lodMaxClamp = 1.0f,
-        .compare = WGPUCompareFunction_Undefined,
-        .maxAnisotropy = 0,
-    };
-    WGPUSampler textureSampler = wgpuDeviceCreateSampler(device, &textureSamplerDescriptor);
-
-    // Create the bind group for the uniform buffer.
-    WGPUBindGroupLayoutEntry bindGroupLayoutEntries[3] = {
-        (WGPUBindGroupLayoutEntry){
-            .binding = 0,
-            .visibility = WGPUShaderStage_Vertex,
-            .buffer = (WGPUBufferBindingLayout){
-                .type = WGPUBufferBindingType_Uniform,
-                .minBindingSize = 2 * sizeof(float),
-            },
-        },
-        (WGPUBindGroupLayoutEntry){
-            .binding = 1,
-            .visibility = WGPUShaderStage_Fragment,
-            .texture = (WGPUTextureBindingLayout){
-                .sampleType = WGPUTextureSampleType_Float,
-                .viewDimension = WGPUTextureViewDimension_2D,
-            },
-        },
-        (WGPUBindGroupLayoutEntry){
-            .binding = 2,
-            .visibility = WGPUShaderStage_Fragment,
-            .sampler = (WGPUSamplerBindingLayout){
-                .type = WGPUSamplerBindingType_Filtering,
-            },
-        },
-    };
-
-    WGPUBindGroupLayoutDescriptor bindGroupLayoutDescriptor = {
-        .nextInChain = NULL,
-        .entryCount = 3,
-        .entries = bindGroupLayoutEntries,
-    };
-    WGPUBindGroupLayout bindGroupLayout = wgpuDeviceCreateBindGroupLayout(device, &bindGroupLayoutDescriptor);
-    WGPUPipelineLayoutDescriptor layoutDescriptor = {
-        .nextInChain = NULL,
-        .bindGroupLayoutCount = 1,
-        .bindGroupLayouts = &bindGroupLayout,
-    };
-    /* WGPUPipelineLayout layout = */ wgpuDeviceCreatePipelineLayout(device, &layoutDescriptor);
-
-    WGPUBindGroupEntry bindings[3] = {
-        (WGPUBindGroupEntry){
-            .nextInChain = NULL,
-            .binding = 0,
-            .buffer = uniformBuffer,
-            .offset = 0,
-            .size = 2 * sizeof(float),
-        },
-        (WGPUBindGroupEntry){
-            .nextInChain = NULL,
-            .binding = 1,
-            .textureView = textureView,
-        },
-        (WGPUBindGroupEntry){
-            .nextInChain = NULL,
-            .binding = 2,
-            .sampler = textureSampler,
-        },
-    };
-    WGPUBindGroupDescriptor bindGroupDescriptor = {
-        .nextInChain = NULL,
-        .layout = bindGroupLayout,
-        .entryCount = bindGroupLayoutDescriptor.entryCount,
-        .entries = bindings,
-    };
-    WGPUBindGroup bindGroup = wgpuDeviceCreateBindGroup(device, &bindGroupDescriptor);
+    SpriteBatch spriteBatch =
+        spriteBatchCreate(10, "test.png", device, queue, uniformBuffer);
+    spriteBatchAdd(&spriteBatch, (Sprite){
+                                     .x = -0.5f,
+                                     .y = -0.5f,
+                                     .z = -1.0f,
+                                 });
+    spriteBatchAdd(&spriteBatch, (Sprite){
+                                     .x = 0.0f,
+                                     .y = 0.0f,
+                                     .z = 0.0f,
+                                 });
+    spriteBatchAdd(&spriteBatch, (Sprite){
+                                     .x = -1.0f,
+                                     .y = -1.0f,
+                                     .z = 1.0f,
+                                 });
 
     bool isRunning = true;
-    while (isRunning)
-    {
-
+    while (isRunning) {
         WGPUTextureView nextTexture = NULL;
 
-        for (int attempt = 0; attempt < 2; attempt++)
-        {
+        for (int attempt = 0; attempt < 2; attempt++) {
             uint32_t prevWidth = config.width;
             uint32_t prevHeight = config.height;
-            SDL_GetWindowSize(window, (int *)&config.width, (int *)&config.height);
+            SDL_GetWindowSize(window, (int *)&config.width,
+                              (int *)&config.height);
 
-            if (prevWidth != config.width || prevHeight != config.height)
-            {
-                depthTextureInfo = createDepthTexture(device, depthTextureFormat, config.width, config.height);
+            if (prevWidth != config.width || prevHeight != config.height) {
+                depthTextureInfo = createDepthTexture(
+                    device, depthTextureFormat, config.width, config.height);
                 swapChain = wgpuDeviceCreateSwapChain(device, surface, &config);
             }
 
             nextTexture = wgpuSwapChainGetCurrentTextureView(swapChain);
-            if (attempt == 0 && !nextTexture)
-            {
-                printf("wgpuSwapChainGetCurrentTextureView() failed; trying to create "
-                       "a new swap chain...\n");
+            if (attempt == 0 && !nextTexture) {
+                printf(
+                    "wgpuSwapChainGetCurrentTextureView() failed; trying to "
+                    "create "
+                    "a new swap chain...\n");
                 config.width = 0;
                 config.height = 0;
                 continue;
             }
 
             float screenRatio[2] = {(float)config.width, (float)config.height};
-            wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &screenRatio, 2 * sizeof(float));
+            wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &screenRatio,
+                                 2 * sizeof(float));
 
             break;
         }
 
-        if (!nextTexture)
-        {
+        if (!nextTexture) {
             printf("Cannot acquire next swap chain texture\n");
             return 1;
         }
 
         WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(
-            device, &(WGPUCommandEncoderDescriptor){.label = "Command Encoder"});
+            device,
+            &(WGPUCommandEncoderDescriptor){.label = "Command Encoder"});
 
         WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(
             encoder, &(WGPURenderPassDescriptor){
@@ -585,12 +751,8 @@ int main(int argc, char *argv[])
                          .depthStencilAttachment = &depthTextureInfo.attachment,
                      });
 
-        wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
-        wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, vertexBuffer, 0, vertexDataCount * sizeof(float));
-        wgpuRenderPassEncoderSetIndexBuffer(renderPass, indexBuffer, WGPUIndexFormat_Uint32, 0, indexCount * sizeof(float));
-        wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 0, NULL);
+        spriteBatchDraw(&spriteBatch, queue, renderPass, pipeline);
 
-        wgpuRenderPassEncoderDrawIndexed(renderPass, indexCount, 1, 0, 0, 0);
         wgpuRenderPassEncoderEnd(renderPass);
         wgpuTextureViewDrop(nextTexture);
 
@@ -600,10 +762,8 @@ int main(int argc, char *argv[])
         wgpuSwapChainPresent(swapChain);
 
         SDL_Event event;
-        while (SDL_PollEvent(&event))
-        {
-            if (event.type == SDL_QUIT)
-            {
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
                 isRunning = false;
             }
         }
