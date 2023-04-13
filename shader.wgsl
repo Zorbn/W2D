@@ -1,4 +1,4 @@
-@group(0) @binding(0) var<uniform> screenRatio: vec2<f32>;
+@group(0) @binding(0) var<uniform> projectionMatrix: mat4x4<f32>;
 @group(0) @binding(1) var texture: texture_2d<f32>;
 @group(0) @binding(2) var textureSampler: sampler;
 
@@ -17,8 +17,8 @@ struct VertexOutput {
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.position = vec4<f32>(in.position.x,
-        in.position.y * (screenRatio.x / screenRatio.y), in.position.z, 1.0);
+    out.position = projectionMatrix * vec4<f32>(in.position.x,
+        in.position.y, in.position.z, 1.0);
     out.color = in.color;
     out.textureCoords = in.textureCoords;
     return out;

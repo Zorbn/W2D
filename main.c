@@ -183,22 +183,51 @@ DepthTextureInfo createDepthTexture(WGPUDevice device,
     };
 }
 
+#define maxZDistance 1000
+#define matrix4Components 16
+
+void orthographicProjection(float matrix[matrix4Components], float left,
+                            float right, float bottom, float top, float zNear,
+                            float zFar) {
+    matrix[0] = 2.0f / (right - left);
+    matrix[1] = 0;
+    matrix[2] = 0;
+    matrix[3] = 0;
+
+    matrix[4] = 0;
+    matrix[5] = 2.0f / (top - bottom);
+    matrix[6] = 0;
+    matrix[7] = 0;
+
+    matrix[8] = 0;
+    matrix[9] = 0;
+    matrix[10] = 1.0f / (zNear - zFar);
+    matrix[11] = 0;
+
+    matrix[12] = (right + left) / (left - right);
+    matrix[13] = (top + bottom) / (bottom - top);
+    matrix[14] = zNear / (zNear - zFar);
+    matrix[15] = 1.0f;
+}
+
 typedef struct {
     float x;
     float y;
     float z;
+    float width;
+    float height;
 } Sprite;
 
 const float spriteVertexData[] = {
     // X Y Z, R G B, TextureX, TextureY
-    +0.0f, +0.0f, +0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, // Vertex 1
-    +1.0f, +0.0f, +0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, // Vertex 2
-    +1.0f, +1.0f, +0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, // Vertex 3
-    +0.0f, +1.0f, +0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Vertex 4
+    +0.0f, +0.0f, +0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,  // Vertex 1
+    +1.0f, +0.0f, +0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,  // Vertex 2
+    +1.0f, +1.0f, +0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,  // Vertex 3
+    +0.0f, +1.0f, +0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,  // Vertex 4
 };
 
 const uint32_t spriteIndexData[] = {
-    0, 1, 2, 0, 2, 3, // Quad
+    0, 1, 2, 0, 2, 3,  // Quad
 };
 
 const int spriteVertexComponents = 8;
@@ -208,7 +237,6 @@ const int indicesPerSprite = 6;
 typedef struct {
     int maxSprites;
     int spriteCount;
-    Sprite *sprites;
 
     float *vertexData;
     uint32_t *indexData;
@@ -245,7 +273,7 @@ SpriteBatch spriteBatchCreate(int maxSprites, char *texturePath,
             .buffer =
                 (WGPUBufferBindingLayout){
                     .type = WGPUBufferBindingType_Uniform,
-                    .minBindingSize = 2 * sizeof(float),
+                    .minBindingSize = matrix4Components * sizeof(float),
                 },
         },
         (WGPUBindGroupLayoutEntry){
@@ -281,7 +309,7 @@ SpriteBatch spriteBatchCreate(int maxSprites, char *texturePath,
             .binding = 0,
             .buffer = uniformBuffer,
             .offset = 0,
-            .size = 2 * sizeof(float),
+            .size = matrix4Components * sizeof(float),
         },
         (WGPUBindGroupEntry){
             .nextInChain = NULL,
@@ -306,7 +334,6 @@ SpriteBatch spriteBatchCreate(int maxSprites, char *texturePath,
     return (SpriteBatch){
         .maxSprites = maxSprites,
         .spriteCount = 0,
-        .sprites = calloc(maxSprites, sizeof(SpriteBatch)),
         .vertexData =
             calloc(maxSprites * verticesPerSprite * spriteVertexComponents,
                    sizeof(float)),
@@ -335,9 +362,9 @@ void spriteBatchAdd(SpriteBatch *spriteBatch, Sprite sprite) {
     for (int i = 0; i < verticesPerSprite; ++i) {
         int componentI = i * spriteVertexComponents;
         spriteBatch->vertexData[vertexComponentI + componentI + 0] =
-            spriteVertexData[componentI + 0] + sprite.x;
+            spriteVertexData[componentI + 0] * sprite.width + sprite.x;
         spriteBatch->vertexData[vertexComponentI + componentI + 1] =
-            spriteVertexData[componentI + 1] + sprite.y;
+            spriteVertexData[componentI + 1] * sprite.height + sprite.y;
         spriteBatch->vertexData[vertexComponentI + componentI + 2] =
             spriteVertexData[componentI + 2] + sprite.z;
         spriteBatch->vertexData[vertexComponentI + componentI + 3] =
@@ -355,9 +382,6 @@ void spriteBatchAdd(SpriteBatch *spriteBatch, Sprite sprite) {
     for (int i = 0; i < indicesPerSprite; ++i) {
         spriteBatch->indexData[indexI + i] = spriteIndexData[i] + vertexI;
     }
-
-    // TODO: Is it necessary to store sprites.
-    spriteBatch->sprites[spriteI] = sprite;
 }
 
 void spriteBatchDraw(SpriteBatch *spriteBatch, WGPUQueue queue,
@@ -566,7 +590,8 @@ int main(int argc, char *argv[]) {
                     .buffers =
                         &(WGPUVertexBufferLayout){
                             .attributeCount = 3,
-                            .arrayStride = spriteVertexComponents * sizeof(float),
+                            .arrayStride =
+                                spriteVertexComponents * sizeof(float),
                             .stepMode = WGPUVertexStepMode_Vertex,
                             .attributes = vertexAttributes,
                         },
@@ -660,10 +685,10 @@ int main(int argc, char *argv[]) {
         wgpuDeviceCreateSwapChain(device, surface, &config);
     WGPUQueue queue = wgpuDeviceGetQueue(device);
 
-    // Create the screen ratio uniform buffer.
+    // Create the projection uniform buffer.
     WGPUBufferDescriptor bufferDescriptor = (WGPUBufferDescriptor){
         .nextInChain = NULL,
-        .size = 2 * sizeof(float),
+        .size = matrix4Components * sizeof(float),
         .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
         .mappedAtCreation = false,
     };
@@ -673,19 +698,25 @@ int main(int argc, char *argv[]) {
     SpriteBatch spriteBatch =
         spriteBatchCreate(10, "test.png", device, queue, uniformBuffer);
     spriteBatchAdd(&spriteBatch, (Sprite){
-                                     .x = -0.5f,
-                                     .y = -0.5f,
+                                     .x = 8.0f,
+                                     .y = 8.0f,
                                      .z = -1.0f,
+                                     .width = 16.0f,
+                                     .height = 16.0f,
                                  });
     spriteBatchAdd(&spriteBatch, (Sprite){
                                      .x = 0.0f,
                                      .y = 0.0f,
                                      .z = 0.0f,
+                                     .width = 16.0f,
+                                     .height = 16.0f,
                                  });
     spriteBatchAdd(&spriteBatch, (Sprite){
-                                     .x = -1.0f,
-                                     .y = -1.0f,
+                                     .x = 16.0f,
+                                     .y = 16.0f,
                                      .z = 1.0f,
+                                     .width = 16.0f,
+                                     .height = 16.0f,
                                  });
 
     bool isRunning = true;
@@ -715,9 +746,13 @@ int main(int argc, char *argv[]) {
                 continue;
             }
 
-            float screenRatio[2] = {(float)config.width, (float)config.height};
-            wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &screenRatio,
-                                 2 * sizeof(float));
+            // Resize projection matrix to match window.
+            float projectionMatrix[matrix4Components];
+            orthographicProjection(projectionMatrix, 0.0f, (float)config.width,
+                                   0.0f, (float)config.height, -maxZDistance,
+                                   maxZDistance);
+            wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &projectionMatrix,
+                                 matrix4Components * sizeof(float));
 
             break;
         }
