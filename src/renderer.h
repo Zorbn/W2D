@@ -10,7 +10,6 @@
 #include "wgpuHelper.h"
 #include "unused.h"
 #include "../webgpu-headers/webgpu.h"
-#include "../wgpu.h"
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
@@ -18,7 +17,6 @@
 typedef struct {
     SDL_Window *window;
     WGPUSwapChainDescriptor config;
-    WGPUSwapChainDescriptorExtras configExtras;
     DepthTextureInfo depthTextureInfo;
     WGPUSurface surface;
     WGPUSwapChain swapChain;

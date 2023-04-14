@@ -259,18 +259,7 @@ Renderer rendererCreate(SDL_Window *window) {
                 },
         });
 
-    renderer.configExtras = (WGPUSwapChainDescriptorExtras){
-        .chain =
-            (WGPUChainedStruct){
-                .next = NULL,
-                .sType = (WGPUSType)WGPUSType_SwapChainDescriptorExtras,
-            },
-        .alphaMode = WGPUCompositeAlphaMode_Auto,
-        .viewFormatCount = 0,
-        .viewFormats = NULL,
-    };
     renderer.config = (WGPUSwapChainDescriptor){
-        .nextInChain = (const WGPUChainedStruct *)&renderer.configExtras,
         .usage = WGPUTextureUsage_RenderAttachment,
         .format = swapChainFormat,
         .width = 0,

@@ -1,6 +1,7 @@
 #ifndef FRAMEWORK_H
 #define FRAMEWORK_H
 
+#include "../webgpu-headers/webgpu.h"
 #include "../wgpu.h"
 
 WGPUShaderModuleDescriptor loadWgsl(const char *name);

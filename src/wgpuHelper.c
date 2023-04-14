@@ -1,18 +1,15 @@
-#include "../webgpu-headers/webgpu.h"
-#include "../wgpu.h"
+#include "wgpuHelper.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "unused.h"
 
-WGPUShaderModuleDescriptor loadWgsl(const char *name)
-{
+WGPUShaderModuleDescriptor loadWgsl(const char *name) {
     FILE *file;
     fopen_s(&file, name, "rb");
 
-    if (!file)
-    {
+    if (!file) {
         printf("Unable to open %s\n", name);
         exit(1);
     }
@@ -36,61 +33,54 @@ WGPUShaderModuleDescriptor loadWgsl(const char *name)
 }
 
 void requestAdapterCallback(WGPURequestAdapterStatus status,
-                              WGPUAdapter received, const char *message,
-                              void *userdata)
-{
+                            WGPUAdapter received, const char *message,
+                            void *userdata) {
     UNUSED(status);
     UNUSED(message);
 
     *(WGPUAdapter *)userdata = received;
 }
 
-void requestDeviceCallback(WGPURequestDeviceStatus status,
-                             WGPUDevice received, const char *message,
-                             void *userdata)
-{
+void requestDeviceCallback(WGPURequestDeviceStatus status, WGPUDevice received,
+                           const char *message, void *userdata) {
     UNUSED(status);
     UNUSED(message);
 
     *(WGPUDevice *)userdata = received;
 }
 
-void readBufferMap(WGPUBufferMapAsyncStatus status, void *userdata)
-{
+void readBufferMap(WGPUBufferMapAsyncStatus status, void *userdata) {
     UNUSED(status);
     UNUSED(userdata);
 }
 
-void logCallback(WGPULogLevel level, const char *msg, void *userdata)
-{
+void logCallback(WGPULogLevel level, const char *msg, void *userdata) {
     UNUSED(userdata);
 
     char *level_str;
-    switch (level)
-    {
-    case WGPULogLevel_Error:
-        level_str = "Error";
-        break;
-    case WGPULogLevel_Warn:
-        level_str = "Warn";
-        break;
-    case WGPULogLevel_Info:
-        level_str = "Info";
-        break;
-    case WGPULogLevel_Debug:
-        level_str = "Debug";
-        break;
-    case WGPULogLevel_Trace:
-        level_str = "Trace";
-        break;
-    default:
-        level_str = "Unknown Level";
+    switch (level) {
+        case WGPULogLevel_Error:
+            level_str = "Error";
+            break;
+        case WGPULogLevel_Warn:
+            level_str = "Warn";
+            break;
+        case WGPULogLevel_Info:
+            level_str = "Info";
+            break;
+        case WGPULogLevel_Debug:
+            level_str = "Debug";
+            break;
+        case WGPULogLevel_Trace:
+            level_str = "Trace";
+            break;
+        default:
+            level_str = "Unknown Level";
     }
     printf("[%s] %s\n", level_str, msg);
 }
 
-void initializeLog(void)
-{
+void initializeLog(void) {
     wgpuSetLogCallback(logCallback, NULL);
     wgpuSetLogLevel(WGPULogLevel_Warn);
 }
@@ -117,45 +107,41 @@ void initializeLog(void)
     printStorageReport(report.textureViews, prefix "textureViews.");         \
     printStorageReport(report.samplers, prefix "samplers.")
 
-void printGlobalReport(WGPUGlobalReport report)
-{
+void printGlobalReport(WGPUGlobalReport report) {
     printf("struct WGPUGlobalReport {\n");
     printStorageReport(report.surfaces, "\tsurfaces.");
 
-    switch (report.backendType)
-    {
-    case WGPUBackendType_D3D11:
-        printHubReport(report.dx11, "\tdx11.");
-        break;
-    case WGPUBackendType_D3D12:
-        printHubReport(report.dx12, "\tdx12.");
-        break;
-    case WGPUBackendType_Metal:
-        printHubReport(report.metal, "\tmetal.");
-        break;
-    case WGPUBackendType_Vulkan:
-        printHubReport(report.vulkan, "\tvulkan.");
-        break;
-    case WGPUBackendType_OpenGL:
-        printHubReport(report.gl, "\tgl.");
-        break;
-    default:
-        printf("WARN:printGlobalReport: invalid backened type: %d",
-               report.backendType);
+    switch (report.backendType) {
+        case WGPUBackendType_D3D11:
+            printHubReport(report.dx11, "\tdx11.");
+            break;
+        case WGPUBackendType_D3D12:
+            printHubReport(report.dx12, "\tdx12.");
+            break;
+        case WGPUBackendType_Metal:
+            printHubReport(report.metal, "\tmetal.");
+            break;
+        case WGPUBackendType_Vulkan:
+            printHubReport(report.vulkan, "\tvulkan.");
+            break;
+        case WGPUBackendType_OpenGL:
+            printHubReport(report.gl, "\tgl.");
+            break;
+        default:
+            printf("WARN:printGlobalReport: invalid backened type: %d",
+                   report.backendType);
     }
     printf("}\n");
 }
 
-void printAdapterFeatures(WGPUAdapter adapter)
-{
+void printAdapterFeatures(WGPUAdapter adapter) {
     size_t count = wgpuAdapterEnumerateFeatures(adapter, NULL);
     WGPUFeatureName *features =
         (WGPUFeatureName *)malloc(count * sizeof(WGPUFeatureName));
     wgpuAdapterEnumerateFeatures(adapter, features);
 
     printf("adapterFeatures = [ ");
-    for (size_t i = 0; i < count; i++)
-    {
+    for (size_t i = 0; i < count; i++) {
         printf("%#.8x ", features[i]);
     }
     printf("]\n");
@@ -163,8 +149,7 @@ void printAdapterFeatures(WGPUAdapter adapter)
     free(features);
 }
 
-void printSurfaceCapabilities(WGPUSurface surface, WGPUAdapter adapter)
-{
+void printSurfaceCapabilities(WGPUSurface surface, WGPUAdapter adapter) {
     WGPUSurfaceCapabilities caps = {0};
 
     wgpuSurfaceGetCapabilities(surface, adapter, &caps);
@@ -179,22 +164,19 @@ void printSurfaceCapabilities(WGPUSurface surface, WGPUAdapter adapter)
     printf("WGPUSurfaceCapabilities {\n");
 
     printf("\t.formats = [ ");
-    for (size_t i = 0; i < caps.formatCount; i++)
-    {
+    for (size_t i = 0; i < caps.formatCount; i++) {
         printf("%#.8X ", caps.formats[i]);
     }
     printf("]\n");
 
     printf("\t.presentModes = [ ");
-    for (size_t i = 0; i < caps.presentModeCount; i++)
-    {
+    for (size_t i = 0; i < caps.presentModeCount; i++) {
         printf("%#.8X ", caps.presentModes[i]);
     }
     printf("]\n");
 
     printf("\t.alphaModes = [ ");
-    for (size_t i = 0; i < caps.alphaModeCount; i++)
-    {
+    for (size_t i = 0; i < caps.alphaModeCount; i++) {
         printf("%#.8X ", caps.alphaModes[i]);
     }
     printf("]\n");
