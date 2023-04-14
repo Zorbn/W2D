@@ -4,8 +4,8 @@
 
 #include "framework.h"
 #include "unused.h"
-#include "webgpu-headers/webgpu.h"
-#include "wgpu.h"
+#include "../webgpu-headers/webgpu.h"
+#include "../wgpu.h"
 
 #define WGPU_TARGET_MACOS 1
 #define WGPU_TARGET_LINUX_X11 2
@@ -732,8 +732,8 @@ int main(int argc, char *argv[]) {
                                      .z = -1.0f,
                                      .width = 160.0f,
                                      .height = 160.0f,
-                                     .texWidth = 8.0f,
-                                     .texHeight = 8.0f,
+                                     .texWidth = 16.0f,
+                                     .texHeight = 16.0f,
                                  });
     spriteBatchAdd(&spriteBatch, (Sprite){
                                      .x = 0.0f,

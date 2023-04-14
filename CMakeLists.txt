@@ -7,7 +7,7 @@ enable_testing()
 set(TARGET_NAME WGPUTest)
 set(CMAKE_C_STANDARD 11)
 
-add_executable(${TARGET_NAME} main.c framework.c framework.h wgpu.h webgpu-headers/webgpu.h)
+add_executable(${TARGET_NAME} src/main.c src/framework.c src/framework.h wgpu.h webgpu-headers/webgpu.h)
 
 if(MSVC)
     add_definitions(-DWGPU_TARGET=WGPU_TARGET_WINDOWS)

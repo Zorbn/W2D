@@ -1,4 +1,4 @@
-#include "wgpu.h"
+#include "../wgpu.h"
 
 WGPUShaderModuleDescriptor load_wgsl(const char *name);
 

@@ -1,5 +1,5 @@
-#include "webgpu-headers/webgpu.h"
-#include "wgpu.h"
+#include "../webgpu-headers/webgpu.h"
+#include "../wgpu.h"
 
 #include <stdio.h>
 #include <stdlib.h>
