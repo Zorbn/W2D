@@ -17,14 +17,14 @@
 #define maxZDistance 1000
 
 static void handleDeviceLost(WGPUDeviceLostReason reason, char const *message,
-                               void *userdata) {
+                             void *userdata) {
     UNUSED(userdata);
 
     printf("DEVICE LOST (%d): %s\n", reason, message);
 }
 
 static void handleUncapturedError(WGPUErrorType type, char const *message,
-                                    void *userdata) {
+                                  void *userdata) {
     UNUSED(userdata);
 
     printf("UNCAPTURED ERROR (%d): %s\n", type, message);
@@ -36,7 +36,6 @@ Renderer rendererCreate(SDL_Window *window) {
     Renderer renderer = (Renderer){
         .window = window,
     };
-
 
     WGPUInstance instance =
         wgpuCreateInstance(&(WGPUInstanceDescriptor){.nextInChain = NULL});
@@ -151,7 +150,8 @@ Renderer rendererCreate(SDL_Window *window) {
     wgpuAdapterRequestDevice(adapter, NULL, requestDeviceCallback,
                              (void *)&renderer.device);
 
-    wgpuDeviceSetUncapturedErrorCallback(renderer.device, handleUncapturedError, NULL);
+    wgpuDeviceSetUncapturedErrorCallback(renderer.device, handleUncapturedError,
+                                         NULL);
     wgpuDeviceSetDeviceLostCallback(renderer.device, handleDeviceLost, NULL);
 
     WGPUShaderModuleDescriptor shaderSource = loadWgsl("shader.wgsl");
@@ -259,20 +259,18 @@ Renderer rendererCreate(SDL_Window *window) {
                 },
         });
 
-    renderer.configExtras =
-        (WGPUSwapChainDescriptorExtras){
-            .chain =
-                (WGPUChainedStruct){
-                    .next = NULL,
-                    .sType = (WGPUSType)WGPUSType_SwapChainDescriptorExtras,
-                },
-            .alphaMode = WGPUCompositeAlphaMode_Auto,
-            .viewFormatCount = 0,
-            .viewFormats = NULL,
-        };
+    renderer.configExtras = (WGPUSwapChainDescriptorExtras){
+        .chain =
+            (WGPUChainedStruct){
+                .next = NULL,
+                .sType = (WGPUSType)WGPUSType_SwapChainDescriptorExtras,
+            },
+        .alphaMode = WGPUCompositeAlphaMode_Auto,
+        .viewFormatCount = 0,
+        .viewFormats = NULL,
+    };
     renderer.config = (WGPUSwapChainDescriptor){
-        .nextInChain =
-            (const WGPUChainedStruct *)&renderer.configExtras,
+        .nextInChain = (const WGPUChainedStruct *)&renderer.configExtras,
         .usage = WGPUTextureUsage_RenderAttachment,
         .format = swapChainFormat,
         .width = 0,
@@ -280,13 +278,15 @@ Renderer rendererCreate(SDL_Window *window) {
         .presentMode = WGPUPresentMode_Fifo,
     };
 
-    SDL_GetWindowSize(window, (int *)&renderer.config.width, (int *)&renderer.config.height);
+    SDL_GetWindowSize(window, (int *)&renderer.config.width,
+                      (int *)&renderer.config.height);
 
-    renderer.depthTextureInfo = depthTextureCreate(
-        renderer.device, depthTextureFormat, renderer.config.width, renderer.config.height);
+    renderer.depthTextureInfo =
+        depthTextureCreate(renderer.device, depthTextureFormat,
+                           renderer.config.width, renderer.config.height);
 
-    renderer.swapChain =
-        wgpuDeviceCreateSwapChain(renderer.device, renderer.surface, &renderer.config);
+    renderer.swapChain = wgpuDeviceCreateSwapChain(
+        renderer.device, renderer.surface, &renderer.config);
     renderer.queue = wgpuDeviceGetQueue(renderer.device);
 
     // Create the projection uniform buffer.
@@ -307,14 +307,15 @@ Renderer rendererCreate(SDL_Window *window) {
 void rendererResize(Renderer *renderer) {
     // Resize projection matrix to match window.
     float projectionMatrix[matrix4Components];
-    orthographicProjection(projectionMatrix, 0.0f, (float)renderer->config.width,
-                           0.0f, (float)renderer->config.height, -maxZDistance,
-                           maxZDistance);
-    wgpuQueueWriteBuffer(renderer->queue, renderer->uniformBuffer, 0, &projectionMatrix,
-                         matrix4Components * sizeof(float));
+    orthographicProjection(
+        projectionMatrix, 0.0f, (float)renderer->config.width, 0.0f,
+        (float)renderer->config.height, -maxZDistance, maxZDistance);
+    wgpuQueueWriteBuffer(renderer->queue, renderer->uniformBuffer, 0,
+                         &projectionMatrix, matrix4Components * sizeof(float));
 }
 
-void rendererBegin(Renderer *renderer, float backgroundR, float backgroundG, float backgroundB) {
+void rendererBegin(Renderer *renderer, float backgroundR, float backgroundG,
+                   float backgroundB) {
     if (renderer->hasRenderPass) {
         return;
     }
@@ -330,15 +331,31 @@ void rendererBegin(Renderer *renderer, float backgroundR, float backgroundG, flo
         SDL_GetWindowSize(renderer->window, (int *)&renderer->config.width,
                           (int *)&renderer->config.height);
 
-        if (prevWidth != renderer->config.width || prevHeight != renderer->config.height) {
-            renderer->swapChain = wgpuDeviceCreateSwapChain(renderer->device, renderer->surface, &renderer->config);
+        // It's invalid to create a swapchain of size 0, so just wait instead.
+        // This could happen either when the window is actually size (0, 0) or
+        // when the window is minimized.
+        while (renderer->config.width == 0 || renderer->config.height == 0 ||
+               (SDL_GetWindowFlags(renderer->window) & SDL_WINDOW_MINIMIZED)) {
+
+            SDL_GetWindowSize(renderer->window, (int *)&renderer->config.width,
+                              (int *)&renderer->config.height);
+            SDL_WaitEvent(NULL);
+        }
+
+        if (prevWidth != renderer->config.width ||
+            prevHeight != renderer->config.height) {
+            // Resize the window.
+            renderer->swapChain = wgpuDeviceCreateSwapChain(
+                renderer->device, renderer->surface, &renderer->config);
             renderer->depthTextureInfo = depthTextureCreate(
-                renderer->device, renderer->depthTextureInfo.format, renderer->config.width, renderer->config.height);
+                renderer->device, renderer->depthTextureInfo.format,
+                renderer->config.width, renderer->config.height);
 
             rendererResize(renderer);
         }
 
-        renderer->nextTexture = wgpuSwapChainGetCurrentTextureView(renderer->swapChain);
+        renderer->nextTexture =
+            wgpuSwapChainGetCurrentTextureView(renderer->swapChain);
         if (attempt == 0 && !renderer->nextTexture) {
             printf(
                 "wgpuSwapChainGetCurrentTextureView() failed! Trying to "
@@ -361,24 +378,25 @@ void rendererBegin(Renderer *renderer, float backgroundR, float backgroundG, flo
         &(WGPUCommandEncoderDescriptor){.label = "Command Encoder"});
 
     renderer->renderPass = wgpuCommandEncoderBeginRenderPass(
-        renderer->encoder, &(WGPURenderPassDescriptor){
-                     .colorAttachments =
-                         &(WGPURenderPassColorAttachment){
-                             .view = renderer->nextTexture,
-                             .resolveTarget = NULL,
-                             .loadOp = WGPULoadOp_Clear,
-                             .storeOp = WGPUStoreOp_Store,
-                             .clearValue =
-                                 (WGPUColor){
-                                     .r = backgroundR,
-                                     .g = backgroundG,
-                                     .b = backgroundB,
-                                     .a = 1.0,
-                                 },
-                         },
-                     .colorAttachmentCount = 1,
-                     .depthStencilAttachment = &renderer->depthTextureInfo.attachment,
-                 });
+        renderer->encoder,
+        &(WGPURenderPassDescriptor){
+            .colorAttachments =
+                &(WGPURenderPassColorAttachment){
+                    .view = renderer->nextTexture,
+                    .resolveTarget = NULL,
+                    .loadOp = WGPULoadOp_Clear,
+                    .storeOp = WGPUStoreOp_Store,
+                    .clearValue =
+                        (WGPUColor){
+                            .r = backgroundR,
+                            .g = backgroundG,
+                            .b = backgroundB,
+                            .a = 1.0,
+                        },
+                },
+            .colorAttachmentCount = 1,
+            .depthStencilAttachment = &renderer->depthTextureInfo.attachment,
+        });
 }
 
 void rendererEnd(Renderer *renderer) {
