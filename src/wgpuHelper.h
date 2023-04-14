@@ -1,12 +1,15 @@
+#ifndef FRAMEWORK_H
+#define FRAMEWORK_H
+
 #include "../wgpu.h"
 
-WGPUShaderModuleDescriptor load_wgsl(const char *name);
+WGPUShaderModuleDescriptor loadWgsl(const char *name);
 
-void request_adapter_callback(WGPURequestAdapterStatus status,
+void requestAdapterCallback(WGPURequestAdapterStatus status,
                               WGPUAdapter received, const char *message,
                               void *userdata);
 
-void request_device_callback(WGPURequestDeviceStatus status,
+void requestDeviceCallback(WGPURequestDeviceStatus status,
                              WGPUDevice received, const char *message,
                              void *userdata);
 
@@ -17,3 +20,5 @@ void initializeLog(void);
 void printGlobalReport(WGPUGlobalReport report);
 void printAdapterFeatures(WGPUAdapter adapter);
 void printSurfaceCapabilities(WGPUSurface surface, WGPUAdapter adapter);
+
+#endif
