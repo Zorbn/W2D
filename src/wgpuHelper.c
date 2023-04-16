@@ -82,7 +82,7 @@ void logCallback(WGPULogLevel level, const char *msg, void *userdata) {
 
 void initializeLog(void) {
     wgpuSetLogCallback(logCallback, NULL);
-    wgpuSetLogLevel(WGPULogLevel_Warn);
+    wgpuSetLogLevel(WGPULogLevel_Error);
 }
 
 #define printStorageReport(report, prefix)                     \

@@ -144,9 +144,6 @@ Renderer rendererCreate(SDL_Window *window) {
     wgpuInstanceRequestAdapter(instance, &adapterOptions,
                                requestAdapterCallback, (void *)&adapter);
 
-    printAdapterFeatures(adapter);
-    printSurfaceCapabilities(renderer.surface, adapter);
-
     wgpuAdapterRequestDevice(adapter, NULL, requestDeviceCallback,
                              (void *)&renderer.device);
 
