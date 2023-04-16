@@ -22,13 +22,17 @@ int main(int argc, char *argv[]) {
     Renderer renderer = rendererCreate(window);
 
     SpriteBatch spriteBatch =
-        spriteBatchCreate(10, "test.png", &renderer);
+        spriteBatchCreate(10, "test.png", &renderer, (SpriteBatchOptions){
+                .textureFilteringMode = TextureFilteringModeNearest,
+                .textureWrapMode = TextureWrapModeRepeat,
+        });
     spriteBatchAdd(&spriteBatch, (Sprite){
                                      .x = 8.0f,
                                      .y = 8.0f,
                                      .z = -1.0f,
                                      .width = 160.0f,
                                      .height = 160.0f,
+                                     .texX = 8.0f,
                                      .texWidth = 16.0f,
                                      .texHeight = 16.0f,
                                  });

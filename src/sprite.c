@@ -2,7 +2,8 @@
 
 #include "spriteModel.h"
 
-SpriteBatch spriteBatchCreate(int maxSprites, char *texturePath, Renderer *renderer) {
+SpriteBatch spriteBatchCreate(int maxSprites, char *texturePath,
+                              Renderer *renderer, SpriteBatchOptions options) {
     // Create the sprite's vertex buffer.
     WGPUBufferDescriptor bufferDescriptor = (WGPUBufferDescriptor){
         .nextInChain = NULL,
@@ -11,14 +12,18 @@ SpriteBatch spriteBatchCreate(int maxSprites, char *texturePath, Renderer *rende
         .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
         .mappedAtCreation = false,
     };
-    WGPUBuffer vertexBuffer = wgpuDeviceCreateBuffer(renderer->device, &bufferDescriptor);
+    WGPUBuffer vertexBuffer =
+        wgpuDeviceCreateBuffer(renderer->device, &bufferDescriptor);
 
     // Create the sprite's index buffer.
     bufferDescriptor.size = maxSprites * indicesPerSprite * sizeof(uint32_t);
     bufferDescriptor.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index;
-    WGPUBuffer indexBuffer = wgpuDeviceCreateBuffer(renderer->device, &bufferDescriptor);
+    WGPUBuffer indexBuffer =
+        wgpuDeviceCreateBuffer(renderer->device, &bufferDescriptor);
 
-    TextureInfo textureInfo = textureCreate(renderer->device, renderer->queue, texturePath);
+    TextureInfo textureInfo =
+        textureCreate(renderer->device, renderer->queue, texturePath,
+                      options.textureWrapMode, options.textureFilteringMode);
 
     // Create the sprite's bind group:
     WGPUBindGroupLayoutEntry bindGroupLayoutEntries[3] = {
@@ -55,8 +60,8 @@ SpriteBatch spriteBatchCreate(int maxSprites, char *texturePath, Renderer *rende
         .entryCount = 3,
         .entries = bindGroupLayoutEntries,
     };
-    WGPUBindGroupLayout bindGroupLayout =
-        wgpuDeviceCreateBindGroupLayout(renderer->device, &bindGroupLayoutDescriptor);
+    WGPUBindGroupLayout bindGroupLayout = wgpuDeviceCreateBindGroupLayout(
+        renderer->device, &bindGroupLayoutDescriptor);
 
     WGPUBindGroupEntry bindings[3] = {
         (WGPUBindGroupEntry){
@@ -175,11 +180,12 @@ void spriteBatchDraw(SpriteBatch *spriteBatch, Renderer *renderer) {
     wgpuRenderPassEncoderSetVertexBuffer(renderer->renderPass, 0,
                                          spriteBatch->vertexBuffer, 0,
                                          vertexComponentCount * sizeof(float));
-    wgpuRenderPassEncoderSetIndexBuffer(renderer->renderPass, spriteBatch->indexBuffer,
-                                        WGPUIndexFormat_Uint32, 0,
-                                        indexCount * sizeof(uint32_t));
-    wgpuRenderPassEncoderSetBindGroup(renderer->renderPass, 0, spriteBatch->bindGroup, 0,
-                                      NULL);
+    wgpuRenderPassEncoderSetIndexBuffer(
+        renderer->renderPass, spriteBatch->indexBuffer, WGPUIndexFormat_Uint32,
+        0, indexCount * sizeof(uint32_t));
+    wgpuRenderPassEncoderSetBindGroup(renderer->renderPass, 0,
+                                      spriteBatch->bindGroup, 0, NULL);
 
-    wgpuRenderPassEncoderDrawIndexed(renderer->renderPass, indexCount, 1, 0, 0, 0);
+    wgpuRenderPassEncoderDrawIndexed(renderer->renderPass, indexCount, 1, 0, 0,
+                                     0);
 }

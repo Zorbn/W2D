@@ -37,7 +37,10 @@ void loadTextureData(WGPUQueue queue, WGPUTexture texture,
                           &size);
 }
 
-TextureInfo textureCreate(WGPUDevice device, WGPUQueue queue, char *path) {
+TextureInfo textureCreate(WGPUDevice device, WGPUQueue queue, char *path,
+                          TextureWrapMode wrapMode,
+                          TextureFilteringMode filteringMode) {
+
     SDL_Surface *textureSurface = loadSurface(path);
     int textureWidth = textureSurface->w;
     int textureHeight = textureSurface->h;
@@ -66,12 +69,18 @@ TextureInfo textureCreate(WGPUDevice device, WGPUQueue queue, char *path) {
     };
     WGPUTextureView view =
         wgpuTextureCreateView(texture, &textureViewDescriptor);
+    WGPUAddressMode textureAddressMode = wrapMode == TextureWrapModeClamp
+                                             ? WGPUAddressMode_ClampToEdge
+                                             : WGPUAddressMode_Repeat;
+    WGPUAddressMode textureFilterMode = filteringMode == TextureFilteringModeNearest
+                                             ? WGPUFilterMode_Nearest
+                                             : WGPUFilterMode_Linear;
     WGPUSamplerDescriptor textureSamplerDescriptor = {
-        .addressModeU = WGPUAddressMode_ClampToEdge,
-        .addressModeV = WGPUAddressMode_ClampToEdge,
-        .addressModeW = WGPUAddressMode_ClampToEdge,
-        .magFilter = WGPUFilterMode_Nearest,
-        .minFilter = WGPUFilterMode_Nearest,
+        .addressModeU = textureAddressMode,
+        .addressModeV = textureAddressMode,
+        .addressModeW = textureAddressMode,
+        .magFilter = textureFilterMode,
+        .minFilter = textureFilterMode,
         .mipmapFilter = WGPUFilterMode_Linear,
         .lodMinClamp = 0.0f,
         .lodMaxClamp = 1.0f,

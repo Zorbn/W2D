@@ -1,9 +1,9 @@
 #ifndef SPRITE_H
 #define SPRITE_H
 
-#include "texture.h"
 #include "matrix.h"
 #include "renderer.h"
+#include "texture.h"
 
 typedef struct {
     float x;
@@ -34,7 +34,13 @@ typedef struct {
     float inverseTexHeight;
 } SpriteBatch;
 
-SpriteBatch spriteBatchCreate(int maxSprites, char *texturePath, Renderer *renderer);
+typedef struct {
+    TextureWrapMode textureWrapMode;
+    TextureFilteringMode textureFilteringMode;
+} SpriteBatchOptions;
+
+SpriteBatch spriteBatchCreate(int maxSprites, char *texturePath,
+                              Renderer *renderer, SpriteBatchOptions options);
 
 void spriteBatchClear(SpriteBatch *spriteBatch);
 

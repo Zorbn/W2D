@@ -23,10 +23,22 @@ typedef struct {
     int height;
 } TextureInfo;
 
+typedef enum {
+    TextureWrapModeRepeat,
+    TextureWrapModeClamp,
+} TextureWrapMode;
+
+typedef enum {
+    TextureFilteringModeLinear,
+    TextureFilteringModeNearest,
+} TextureFilteringMode;
+
 void loadTextureData(WGPUQueue queue, WGPUTexture texture,
                      SDL_Surface *textureSurface);
 
-TextureInfo textureCreate(WGPUDevice device, WGPUQueue queue, char *path);
+TextureInfo textureCreate(WGPUDevice device, WGPUQueue queue, char *path,
+                          TextureWrapMode wrapMode,
+                          TextureFilteringMode filteringMode);
 
 DepthTextureInfo depthTextureCreate(WGPUDevice device,
                                     WGPUTextureFormat depthTextureFormat,
