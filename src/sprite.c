@@ -138,17 +138,16 @@ void spriteBatchAdd(SpriteBatch *spriteBatch, Sprite sprite) {
             spriteVertexData[componentI + 1] * sprite.height + sprite.y;
         spriteBatch->vertexData[vertexDataI + 2] =
             spriteVertexData[componentI + 2] + sprite.z;
-        spriteBatch->vertexData[vertexDataI + 3] =
-            spriteVertexData[componentI + 3];
-        spriteBatch->vertexData[vertexDataI + 4] =
-            spriteVertexData[componentI + 4];
-        spriteBatch->vertexData[vertexDataI + 5] =
-            spriteVertexData[componentI + 5];
-        spriteBatch->vertexData[vertexDataI + 6] =
-            spriteVertexData[componentI + 6] * normalTextureWidth +
+        spriteBatch->vertexData[vertexDataI + 3] = sprite.r;
+        spriteBatch->vertexData[vertexDataI + 4] = sprite.g;
+        spriteBatch->vertexData[vertexDataI + 5] = sprite.b;
+        spriteBatch->vertexData[vertexDataI + 6] = sprite.a;
+        spriteBatch->vertexData[vertexDataI + 7] = sprite.blend;
+        spriteBatch->vertexData[vertexDataI + 8] =
+            spriteVertexData[componentI + 8] * normalTextureWidth +
             normalTextureX;
-        spriteBatch->vertexData[vertexDataI + 7] =
-            spriteVertexData[componentI + 7] * normalTextureHeight +
+        spriteBatch->vertexData[vertexDataI + 9] =
+            spriteVertexData[componentI + 9] * normalTextureHeight +
             normalTextureY;
     }
 

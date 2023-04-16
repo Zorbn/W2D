@@ -4,14 +4,16 @@
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
-    @location(1) color: vec3<f32>,
-    @location(2) textureCoords: vec2<f32>,
+    @location(1) color: vec4<f32>,
+    @location(2) blend: f32,
+    @location(3) textureCoords: vec2<f32>,
 };
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
-    @location(0) color: vec3<f32>,
-    @location(1) textureCoords: vec2<f32>,
+    @location(0) color: vec4<f32>,
+    @location(1) blend: f32,
+    @location(2) textureCoords: vec2<f32>,
 }
 
 @vertex
@@ -20,6 +22,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.position = projectionMatrix * vec4<f32>(in.position.x,
         in.position.y, in.position.z, 1.0);
     out.color = in.color;
+    out.blend = in.blend;
     out.textureCoords = in.textureCoords;
     return out;
 
@@ -29,9 +32,9 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let textureColor = textureSample(texture, textureSampler, in.textureCoords);
 
-    if (textureColor.a < 1.0) {
+    if (textureColor.a == 0.0) {
         discard;
     }
 
-    return vec4<f32>(in.color, 1.0) * textureColor;
+    return mix(textureColor, in.color, in.blend);
 }

@@ -3,7 +3,7 @@
 
 #include <inttypes.h>
 
-#define spriteVertexComponents 8
+#define spriteVertexComponents 10
 #define verticesPerSprite 4
 #define indicesPerSprite 6
 

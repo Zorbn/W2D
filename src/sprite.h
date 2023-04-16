@@ -17,6 +17,12 @@ typedef struct {
     float texY;
     float texWidth;
     float texHeight;
+
+    float r;
+    float g;
+    float b;
+    float a;
+    float blend;
 } Sprite;
 
 typedef struct {

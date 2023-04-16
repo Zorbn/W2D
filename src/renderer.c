@@ -158,7 +158,7 @@ Renderer rendererCreate(SDL_Window *window) {
     WGPUTextureFormat swapChainFormat =
         wgpuSurfaceGetPreferredFormat(renderer.surface, adapter);
 
-    WGPUVertexAttribute vertexAttributes[3] = {
+    WGPUVertexAttribute vertexAttributes[4] = {
         (WGPUVertexAttribute){
             .shaderLocation = 0,
             .format = WGPUVertexFormat_Float32x3,
@@ -166,13 +166,18 @@ Renderer rendererCreate(SDL_Window *window) {
         },
         (WGPUVertexAttribute){
             .shaderLocation = 1,
-            .format = WGPUVertexFormat_Float32x3,
+            .format = WGPUVertexFormat_Float32x4,
             .offset = 3 * sizeof(float),
         },
         (WGPUVertexAttribute){
             .shaderLocation = 2,
+            .format = WGPUVertexFormat_Float32,
+            .offset = 7 * sizeof(float),
+        },
+        (WGPUVertexAttribute){
+            .shaderLocation = 3,
             .format = WGPUVertexFormat_Float32x2,
-            .offset = 6 * sizeof(float),
+            .offset = 8 * sizeof(float),
         },
     };
 
@@ -188,7 +193,7 @@ Renderer rendererCreate(SDL_Window *window) {
                     .bufferCount = 1,
                     .buffers =
                         &(WGPUVertexBufferLayout){
-                            .attributeCount = 3,
+                            .attributeCount = 4,
                             .arrayStride =
                                 spriteVertexComponents * sizeof(float),
                             .stepMode = WGPUVertexStepMode_Vertex,
@@ -219,8 +224,8 @@ Renderer rendererCreate(SDL_Window *window) {
                                 &(WGPUBlendState){
                                     .color =
                                         (WGPUBlendComponent){
-                                            .srcFactor = WGPUBlendFactor_One,
-                                            .dstFactor = WGPUBlendFactor_Zero,
+                                            .srcFactor = WGPUBlendFactor_SrcAlpha,
+                                            .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
                                             .operation = WGPUBlendOperation_Add,
                                         },
                                     .alpha =
