@@ -4,19 +4,24 @@ project(WGPUTest VERSION 0.1.0)
 include(CTest)
 enable_testing()
 
-set(TARGET_NAME WGPUTest)
+set(TARGET_NAME W2D)
 set(CMAKE_C_STANDARD 11)
 
-add_executable(
+add_library(
     ${TARGET_NAME}
-    src/main.c src/renderer.c
-    src/renderer.h
+    OBJECT
+    src/renderer.c src/renderer.h
     src/texture.c src/texture.h
     src/wgpuHelper.c src/wgpuHelper.h
     src/spriteModel.c src/spriteModel.h
     src/sprite.c src/sprite.h
     src/matrix.c src/matrix.h
     wgpu.h webgpu-headers/webgpu.h
+)
+
+add_executable(
+    Example
+    src/main.c
 )
 
 if(MSVC)
@@ -48,10 +53,20 @@ find_package(SDL2_image CONFIG REQUIRED)
 find_library(WGPU_LIBRARY wgpu_native HINTS "${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(
-    WGPUTest PRIVATE
+    ${TARGET_NAME} PRIVATE
     $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
     $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
     $<IF:$<TARGET_EXISTS:SDL2_image::SDL2_image>,SDL2_image::SDL2_image,SDL2_image::SDL2_image-static>
+    ${WGPU_LIBRARY}
+    ${OS_LIBRARIES}
+)
+
+target_link_libraries(
+    Example PRIVATE
+    $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
+    $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
+    $<IF:$<TARGET_EXISTS:SDL2_image::SDL2_image>,SDL2_image::SDL2_image,SDL2_image::SDL2_image-static>
+    $<TARGET_OBJECTS:W2D>
     ${WGPU_LIBRARY}
     ${OS_LIBRARIES}
 )

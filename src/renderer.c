@@ -30,7 +30,7 @@ static void handleUncapturedError(WGPUErrorType type, char const *message,
     printf("UNCAPTURED ERROR (%d): %s\n", type, message);
 }
 
-Renderer rendererCreate(SDL_Window *window) {
+Renderer rendererCreate(SDL_Window *window, char *shaderPath) {
     initializeLog();
 
     Renderer renderer = (Renderer){
@@ -151,7 +151,7 @@ Renderer rendererCreate(SDL_Window *window) {
                                          NULL);
     wgpuDeviceSetDeviceLostCallback(renderer.device, handleDeviceLost, NULL);
 
-    WGPUShaderModuleDescriptor shaderSource = loadWgsl("shader.wgsl");
+    WGPUShaderModuleDescriptor shaderSource = loadWgsl(shaderPath);
     WGPUShaderModule shader =
         wgpuDeviceCreateShaderModule(renderer.device, &shaderSource);
 

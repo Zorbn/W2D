@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    Renderer renderer = rendererCreate(window);
+    Renderer renderer = rendererCreate(window, "shader.wgsl");
 
     SpriteBatch spriteBatch =
         spriteBatchCreate(10, "test.png", &renderer, (SpriteBatchOptions){

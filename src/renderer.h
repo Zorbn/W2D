@@ -31,7 +31,7 @@ typedef struct {
     bool hasRenderPass;
 } Renderer;
 
-Renderer rendererCreate(SDL_Window *window);
+Renderer rendererCreate(SDL_Window *window, char *shaderPath);
 void rendererResize(Renderer *renderer);
 void rendererBegin(Renderer *renderer, float backgroundR, float backgroundG, float backgroundB);
 void rendererEnd(Renderer *renderer);
